@@ -9,6 +9,7 @@ import * as vscode from 'vscode';
 import { LiveShare } from 'vsls/vscode.js';
 import { PostCommitCommandsProvider, Repository } from './api/api';
 import { GitApiImpl } from './api/api1';
+import { activateAzure, AzureIntegration } from './azure/extension';
 import { registerCommands } from './commands';
 import { AuthProvider } from './common/authentication';
 import { commands, contexts } from './common/executeCommands';
@@ -339,7 +340,14 @@ function initChat(context: vscode.ExtensionContext, credentialStore: CredentialS
 	}
 }
 
-export async function activate(context: vscode.ExtensionContext): Promise<GitApiImpl> {
+export async function activate(context: vscode.ExtensionContext): Promise<GitApiImpl | AzureIntegration> {
+	const provider = vscode.workspace.getConfiguration('azureDevOps').get<string>('provider', 'azureDevOps');
+	if (provider === 'azureDevOps') {
+		return activateAzure(context);
+	}
+	if (provider !== 'github') {
+		throw new Error(vscode.l10n.t('Unknown pull request provider: {0}. Set azureDevOps.provider to azureDevOps or github.', provider));
+	}
 	Logger.appendLine(`Extension version: ${vscode.extensions.getExtension(EXTENSION_ID)?.packageJSON.version}`, 'Activation');
 
 	// @ts-ignore

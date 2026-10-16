@@ -1,14 +1,13 @@
 {
-	"name": "vscode-pull-request-github",
+	"name": "vscode-pull-request-azdo",
 	"displayName": "%displayName%",
 	"description": "%description%",
-	"icon": "resources/icons/github_logo.png",
 	"repository": {
 		"type": "git",
-		"url": "https://github.com/Microsoft/vscode-pull-request-github"
+		"url": "https://github.com/jhare96/vscode-pull-request-azdo"
 	},
 	"bugs": {
-		"url": "https://github.com/Microsoft/vscode-pull-request-github/issues"
+		"url": "https://github.com/jhare96/vscode-pull-request-azdo/issues"
 	},
 	"enabledApiProposals": [
 		"activeComment",
@@ -46,7 +45,7 @@
 		"treeViewMarkdownMessage"
 	],
 	"version": "0.170.0",
-	"publisher": "GitHub",
+	"publisher": "jhare96",
 	"engines": {
 		"node": ">=20",
 		"vscode": "^1.141.0"
@@ -57,7 +56,7 @@
 		"Chat"
 	],
 	"extensionDependencies": [
-		"vscode.github-authentication"
+		"vscode.microsoft-authentication"
 	],
 	"activationEvents": [
 		"onStartupFinished",
@@ -71,7 +70,9 @@
 		"onWebviewPanel:IssueOverview",
 		"onWebviewPanel:PullRequestOverview",
 		"onChatContextProvider:githubpr",
-		"onChatContextProvider:githubissue"
+		"onChatContextProvider:githubissue",
+		"onChatContextProvider:azureDevOpsPr",
+		"onChatContextProvider:azureDevOpsWorkItem"
 	],
 	"browser": "./dist/browser/extension",
 	"l10n": "./dist/browser/extension",
@@ -88,6 +89,16 @@
 	"contributes": {
 		"chatContext": [
 			{
+				"id": "azureDevOpsPr",
+				"icon": "$(git-pull-request)",
+				"displayName": "%azureDevOps.chatPullRequests%"
+			},
+			{
+				"id": "azureDevOpsWorkItem",
+				"icon": "$(issues)",
+				"displayName": "%azureDevOps.chatWorkItems%"
+			},
+			{
 				"id": "githubpr",
 				"icon": "$(github)",
 				"displayName": "GitHub Pull Requests"
@@ -100,8 +111,95 @@
 		],
 		"configuration": {
 			"type": "object",
-			"title": "GitHub Pull Requests",
+			"title": "Azure DevOps",
 			"properties": {
+				"azureDevOps.provider": {
+					"type": "string",
+					"enum": [
+						"azureDevOps",
+						"github"
+					],
+					"default": "azureDevOps",
+					"scope": "window",
+					"description": "%azureDevOps.provider%"
+				},
+				"azureDevOps.remotes": {
+					"type": "array",
+					"items": {
+						"type": "string"
+					},
+					"default": [
+						"origin",
+						"upstream"
+					],
+					"description": "%azureDevOps.remotes%"
+				},
+				"azureDevOps.serverCollections": {
+					"type": "array",
+					"items": {
+						"type": "string",
+						"pattern": "^https://"
+					},
+					"default": [],
+					"scope": "machine",
+					"description": "%azureDevOps.serverCollections%"
+				},
+				"azureDevOps.pullRequestStatus": {
+					"type": "string",
+					"enum": [
+						"active",
+						"all"
+					],
+					"default": "active",
+					"description": "%azureDevOps.pullRequestStatus%"
+				},
+				"azureDevOps.workItemQuery": {
+					"type": "string",
+					"default": "SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = @project AND [System.State] <> 'Closed' AND [System.State] <> 'Done' AND [System.State] <> 'Removed' ORDER BY [System.ChangedDate] DESC",
+					"description": "%azureDevOps.workItemQuery%"
+				},
+				"azureDevOps.queries": {
+					"type": "array",
+					"default": [],
+					"description": "%azureDevOps.queries%",
+					"items": {
+						"type": "object",
+						"additionalProperties": false,
+						"required": [
+							"label"
+						],
+						"properties": {
+							"label": {
+								"type": "string",
+								"minLength": 1
+							},
+							"author": {
+								"type": "string"
+							},
+							"reviewer": {
+								"type": "string"
+							},
+							"status": {
+								"type": "string",
+								"enum": [
+									"active",
+									"completed",
+									"abandoned",
+									"all"
+								]
+							},
+							"source": {
+								"type": "string"
+							},
+							"target": {
+								"type": "string"
+							},
+							"waiting": {
+								"type": "boolean"
+							}
+						}
+					}
+				},
 				"githubPullRequests.pullRequestTitle": {
 					"deprecationMessage": "The pull request title now uses the same defaults as GitHub, and can be edited before create.",
 					"type": "string",
@@ -930,6 +1028,11 @@
 		"viewsContainers": {
 			"activitybar": [
 				{
+					"id": "azureDevOps",
+					"title": "%azureDevOps.name%",
+					"icon": "$(git-pull-request)"
+				},
+				{
 					"id": "github-pull-requests",
 					"title": "%view.github.pull.requests.name%",
 					"icon": "$(github)"
@@ -942,31 +1045,52 @@
 			]
 		},
 		"views": {
+			"azureDevOps": [
+				{
+					"id": "azureDevOps.pullRequests",
+					"name": "%azureDevOps.pullRequests%",
+					"when": "config.azureDevOps.provider == azureDevOps",
+					"icon": "$(git-pull-request)"
+				},
+				{
+					"id": "azureDevOps.workItems",
+					"name": "%azureDevOps.workItems%",
+					"when": "config.azureDevOps.provider == azureDevOps",
+					"icon": "$(issues)"
+				},
+				{
+					"id": "azureDevOps.notifications",
+					"name": "%azureDevOps.notifications%",
+					"when": "config.azureDevOps.provider == azureDevOps",
+					"icon": "$(bell)",
+					"visibility": "collapsed"
+				}
+			],
 			"github-pull-requests": [
 				{
 					"id": "github:login",
 					"name": "%view.github.login.name%",
-					"when": "(ReposManagerStateContext == NeedsAuthentication) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && (ReposManagerStateContext == NeedsAuthentication) && !isSessionsWindow",
 					"icon": "$(git-pull-request)"
 				},
 				{
 					"id": "pr:github",
 					"name": "%view.pr.github.name%",
-					"when": "(ReposManagerStateContext != NeedsAuthentication && !github:resolvingConflicts) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && (ReposManagerStateContext != NeedsAuthentication && !github:resolvingConflicts) && !isSessionsWindow",
 					"icon": "$(github-inverted)",
 					"accessibilityHelpContent": "%view.pr.github.accessibilityHelpContent%"
 				},
 				{
 					"id": "issues:github",
 					"name": "%view.issues.github.name%",
-					"when": "(ReposManagerStateContext != NeedsAuthentication && !github:resolvingConflicts) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && (ReposManagerStateContext != NeedsAuthentication && !github:resolvingConflicts) && !isSessionsWindow",
 					"icon": "$(issues)",
 					"accessibilityHelpContent": "%view.pr.github.accessibilityHelpContent%"
 				},
 				{
 					"id": "notifications:github",
 					"name": "%view.notifications.github.name%",
-					"when": "(ReposManagerStateContext != NeedsAuthentication && !github:resolvingConflicts && (remoteName != codespaces || !isWeb)) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && (ReposManagerStateContext != NeedsAuthentication && !github:resolvingConflicts && (remoteName != codespaces || !isWeb)) && !isSessionsWindow",
 					"icon": "$(bell)",
 					"accessibilityHelpContent": "%view.pr.github.accessibilityHelpContent%",
 					"visibility": "collapsed"
@@ -974,7 +1098,7 @@
 				{
 					"id": "github:conflictResolution",
 					"name": "%view.github.conflictResolution.name%",
-					"when": "(github:resolvingConflicts) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((github:resolvingConflicts) && !isSessionsWindow)",
 					"icon": "$(git-merge)"
 				}
 			],
@@ -983,7 +1107,7 @@
 					"id": "github:createPullRequestWebview",
 					"type": "webview",
 					"name": "%view.github.create.pull.request.name%",
-					"when": "(github:createPullRequest || github:revertPullRequest) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((github:createPullRequest || github:revertPullRequest) && !isSessionsWindow)",
 					"icon": "$(git-pull-request-create)",
 					"visibility": "visible",
 					"initialSize": 2
@@ -991,7 +1115,7 @@
 				{
 					"id": "github:compareChangesFiles",
 					"name": "%view.github.compare.changes.name%",
-					"when": "(github:createPullRequest) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((github:createPullRequest) && !isSessionsWindow)",
 					"icon": "$(git-compare)",
 					"visibility": "visible",
 					"initialSize": 1
@@ -999,7 +1123,7 @@
 				{
 					"id": "github:compareChangesCommits",
 					"name": "%view.github.compare.changesCommits.name%",
-					"when": "(github:createPullRequest) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((github:createPullRequest) && !isSessionsWindow)",
 					"icon": "$(git-compare)",
 					"visibility": "visible",
 					"initialSize": 1
@@ -1007,7 +1131,7 @@
 				{
 					"id": "prStatus:github",
 					"name": "%view.pr.status.github.name%",
-					"when": "(github:inReviewMode && !github:createPullRequest && !github:revertPullRequest) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((github:inReviewMode && !github:createPullRequest && !github:revertPullRequest) && !isSessionsWindow)",
 					"icon": "$(diff-multiple)",
 					"visibility": "visible",
 					"initialSize": 3
@@ -1016,988 +1140,1270 @@
 					"id": "github:activePullRequest",
 					"type": "webview",
 					"name": "%view.github.active.pull.request.name%",
-					"when": "(github:inReviewMode && github:focusedReview && !github:createPullRequest && !github:revertPullRequest && github:activePRCount <= 1) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((github:inReviewMode && github:focusedReview && !github:createPullRequest && !github:revertPullRequest && github:activePRCount <= 1) && !isSessionsWindow)",
 					"icon": "$(code-review)",
 					"initialSize": 2
 				},
 				{
 					"id": "github:activePullRequest:welcome",
 					"name": "%view.github.active.pull.request.welcome.name%",
-					"when": "(!github:stateValidated && github:focusedReview) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((!github:stateValidated && github:focusedReview) && !isSessionsWindow)",
 					"icon": "$(git-pull-request)"
 				}
 			]
 		},
 		"commands": [
 			{
+				"command": "azureDevOps.openPullRequest",
+				"title": "%azureDevOps.openPullRequest%",
+				"category": "%azureDevOps.name%",
+				"enablement": "config.azureDevOps.provider == azureDevOps"
+			},
+			{
+				"command": "azureDevOps.toggleFileViewed",
+				"title": "%azureDevOps.toggleFileViewed%",
+				"category": "%azureDevOps.name%",
+				"enablement": "config.azureDevOps.provider == azureDevOps"
+			},
+			{
+				"command": "azureDevOps.applySuggestion",
+				"title": "%azureDevOps.applySuggestion%",
+				"category": "%azureDevOps.name%",
+				"enablement": "config.azureDevOps.provider == azureDevOps"
+			},
+			{
+				"command": "azureDevOps.signIn",
+				"title": "%azureDevOps.signIn%",
+				"category": "%azureDevOps.name%",
+				"enablement": "config.azureDevOps.provider == azureDevOps"
+			},
+			{
+				"command": "azureDevOps.startReview",
+				"title": "%azureDevOps.startReview%",
+				"category": "%azureDevOps.name%",
+				"enablement": "config.azureDevOps.provider == azureDevOps"
+			},
+			{
+				"command": "azureDevOps.submitReview",
+				"title": "%azureDevOps.submitReview%",
+				"category": "%azureDevOps.name%",
+				"enablement": "config.azureDevOps.provider == azureDevOps"
+			},
+			{
+				"command": "azureDevOps.openNotification",
+				"title": "%azureDevOps.openNotification%",
+				"category": "%azureDevOps.name%",
+				"enablement": "config.azureDevOps.provider == azureDevOps"
+			},
+			{
+				"command": "azureDevOps.markNotificationsRead",
+				"title": "%azureDevOps.markNotificationsRead%",
+				"category": "%azureDevOps.name%",
+				"enablement": "config.azureDevOps.provider == azureDevOps",
+				"icon": "$(check-all)"
+			},
+			{
+				"command": "azureDevOps.signOut",
+				"title": "%azureDevOps.signOut%",
+				"category": "%azureDevOps.name%",
+				"enablement": "config.azureDevOps.provider == azureDevOps"
+			},
+			{
+				"command": "azureDevOps.refresh",
+				"title": "%azureDevOps.refresh%",
+				"category": "%azureDevOps.name%",
+				"icon": "$(refresh)",
+				"enablement": "config.azureDevOps.provider == azureDevOps"
+			},
+			{
+				"command": "azureDevOps.createPullRequest",
+				"title": "%azureDevOps.createPullRequest%",
+				"category": "%azureDevOps.name%",
+				"icon": "$(git-pull-request-create)",
+				"enablement": "config.azureDevOps.provider == azureDevOps"
+			},
+			{
+				"command": "azureDevOps.createWorkItem",
+				"title": "%azureDevOps.createWorkItem%",
+				"category": "%azureDevOps.name%",
+				"icon": "$(add)",
+				"enablement": "config.azureDevOps.provider == azureDevOps"
+			},
+			{
+				"command": "azureDevOps.pullRequestActions",
+				"title": "%azureDevOps.pullRequestActions%",
+				"category": "%azureDevOps.name%",
+				"icon": "$(ellipsis)",
+				"enablement": "config.azureDevOps.provider == azureDevOps"
+			},
+			{
+				"command": "azureDevOps.workItemActions",
+				"title": "%azureDevOps.workItemActions%",
+				"category": "%azureDevOps.name%",
+				"enablement": "config.azureDevOps.provider == azureDevOps"
+			},
+			{
+				"command": "azureDevOps.reply",
+				"title": "%azureDevOps.reply%",
+				"category": "%azureDevOps.name%",
+				"enablement": "config.azureDevOps.provider == azureDevOps"
+			},
+			{
+				"command": "azureDevOps.openDiff",
+				"title": "%azureDevOps.openDiff%",
+				"category": "%azureDevOps.name%",
+				"enablement": "config.azureDevOps.provider == azureDevOps"
+			},
+			{
+				"command": "azureDevOps.resolveThread",
+				"title": "%azureDevOps.resolveThread%",
+				"category": "%azureDevOps.name%",
+				"enablement": "config.azureDevOps.provider == azureDevOps"
+			},
+			{
+				"command": "azureDevOps.reopenThread",
+				"title": "%azureDevOps.reopenThread%",
+				"category": "%azureDevOps.name%",
+				"enablement": "config.azureDevOps.provider == azureDevOps"
+			},
+			{
+				"command": "azureDevOps.editComment",
+				"title": "%azureDevOps.editComment%",
+				"category": "%azureDevOps.name%",
+				"enablement": "config.azureDevOps.provider == azureDevOps"
+			},
+			{
+				"command": "azureDevOps.deleteComment",
+				"title": "%azureDevOps.deleteComment%",
+				"category": "%azureDevOps.name%",
+				"enablement": "config.azureDevOps.provider == azureDevOps"
+			},
+			{
 				"command": "github.api.preloadPullRequest",
 				"title": "Preload Pull Request",
-				"category": "%command.pull.request.category%"
+				"category": "%command.pull.request.category%",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "pr.create",
 				"title": "%command.pr.create.title%",
 				"icon": "$(git-pull-request-create)",
-				"category": "%command.pull.request.category%"
+				"category": "%command.pull.request.category%",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "pr.pushAndCreate",
 				"title": "%command.pr.create.title%",
 				"icon": "$(git-pull-request-create)",
-				"category": "%command.pull.request.category%"
+				"category": "%command.pull.request.category%",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "pr.pick",
 				"title": "%command.pr.pick.title%",
 				"category": "%command.pull.request.category%",
-				"enablement": "viewItem =~ /hasHeadRef/",
+				"enablement": "config.azureDevOps.provider == github && (viewItem =~ /hasHeadRef/)",
 				"icon": "$(arrow-right)"
 			},
 			{
 				"command": "pr.openChanges",
 				"title": "%command.pr.openChanges.title%",
 				"category": "%command.pull.request.category%",
-				"icon": "$(diff-multiple)"
+				"icon": "$(diff-multiple)",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "pr.pickOnVscodeDev",
 				"title": "%command.pr.pickOnVscodeDev.title%",
 				"category": "%command.pull.request.category%",
-				"icon": "$(globe)"
+				"icon": "$(globe)",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "pr.pickOnCodespaces",
 				"title": "%command.pr.pickOnCodespaces.title%",
 				"category": "%command.pull.request.category%",
-				"icon": "$(cloud)"
+				"icon": "$(cloud)",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "pr.pickInWorktree",
 				"title": "%command.pr.pickInWorktreeFromDescription.title%",
 				"category": "%command.pull.request.category%",
-				"icon": "$(folder-library)"
+				"icon": "$(folder-library)",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "pr.pickInWorktreeFromDescription",
 				"title": "%command.pr.pickInWorktree.title%",
 				"category": "%command.pull.request.category%",
-				"icon": "$(folder-library)"
+				"icon": "$(folder-library)",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "pr.exit",
 				"title": "%command.pr.exit.title%",
-				"category": "%command.pull.request.category%"
+				"category": "%command.pull.request.category%",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "pr.dismissNotification",
 				"title": "%command.pr.dismissNotification.title%",
-				"category": "%command.pull.request.category%"
+				"category": "%command.pull.request.category%",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "pr.markAllCopilotNotificationsAsRead",
 				"title": "%command.pr.markAllCopilotNotificationsAsRead.title%",
 				"category": "%command.pull.request.category%",
-				"enablement": "viewItem == copilot-query-with-notifications"
+				"enablement": "config.azureDevOps.provider == github && (viewItem == copilot-query-with-notifications)"
 			},
 			{
 				"command": "pr.merge",
 				"title": "%command.pr.merge.title%",
-				"category": "%command.pull.request.category%"
+				"category": "%command.pull.request.category%",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "pr.readyForReview",
 				"title": "%command.pr.readyForReview.title%",
-				"category": "%command.pull.request.category%"
+				"category": "%command.pull.request.category%",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "pr.readyForReviewAndMerge",
 				"title": "%command.pr.readyForReviewAndMerge.title%",
-				"category": "%command.pull.request.category%"
+				"category": "%command.pull.request.category%",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "pr.readyForReviewDescription",
 				"title": "%command.pr.readyForReview.title%",
-				"category": "%command.pull.request.category%"
+				"category": "%command.pull.request.category%",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "pr.readyForReviewAndMergeDescription",
 				"title": "%command.pr.readyForReviewAndMerge.title%",
-				"category": "%command.pull.request.category%"
+				"category": "%command.pull.request.category%",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "pr.openPullRequestOnGitHub",
 				"title": "%command.pr.openPullRequestOnGitHub.title%",
 				"category": "%command.pull.request.category%",
-				"icon": "$(globe)"
+				"icon": "$(globe)",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "pr.openAllDiffs",
 				"title": "%command.pr.openAllDiffs.title%",
-				"category": "%command.pull.request.category%"
+				"category": "%command.pull.request.category%",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "pr.refreshPullRequest",
 				"title": "%command.pr.refreshPullRequest.title%",
-				"category": "%command.pull.request.category%"
+				"category": "%command.pull.request.category%",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "pr.addToStack",
 				"title": "%command.pr.addToStack.title%",
-				"category": "%command.pull.request.category%"
+				"category": "%command.pull.request.category%",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "pr.openFileOnGitHub",
 				"title": "%command.pr.openFileOnGitHub.title%",
-				"category": "%command.pull.request.category%"
+				"category": "%command.pull.request.category%",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "pr.revealFileInOS",
 				"title": "%command.pr.revealFileInOS.title%",
-				"category": "%command.pull.request.category%"
+				"category": "%command.pull.request.category%",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "pr.copyCommitHash",
 				"title": "%command.pr.copyCommitHash.title%",
-				"category": "%command.pull.request.category%"
+				"category": "%command.pull.request.category%",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "pr.openOriginalFile",
 				"title": "%command.pr.openOriginalFile.title%",
-				"category": "%command.pull.request.category%"
+				"category": "%command.pull.request.category%",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "pr.openModifiedFile",
 				"title": "%command.pr.openModifiedFile.title%",
-				"category": "%command.pull.request.category%"
+				"category": "%command.pull.request.category%",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "pr.openDiffView",
 				"title": "%command.pr.openDiffView.title%",
 				"category": "%command.pull.request.category%",
-				"icon": "$(compare-changes)"
+				"icon": "$(compare-changes)",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "pr.openDiffViewFromEditor",
 				"title": "%command.pr.openDiffViewFromEditor.title%",
 				"category": "%command.pull.request.category%",
-				"icon": "$(git-pull-request)"
+				"icon": "$(git-pull-request)",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "pr.openDescription",
 				"title": "%command.pr.openDescription.title%",
 				"category": "%command.pull.request.category%",
 				"when": "github:inReviewMode",
-				"icon": "$(note)"
+				"icon": "$(note)",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "pr.openDescriptionToTheSide",
 				"title": "%command.pr.openDescriptionToTheSide.title%",
-				"icon": "$(split-horizontal)"
+				"icon": "$(split-horizontal)",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "pr.refreshDescription",
 				"title": "%command.pr.refreshDescription.title%",
-				"category": "%command.pull.request.category%"
+				"category": "%command.pull.request.category%",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "pr.focusDescriptionInput",
 				"title": "%command.pr.focusDescriptionInput.title%",
-				"category": "%command.pull.request.category%"
+				"category": "%command.pull.request.category%",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "pr.showDiffSinceLastReview",
 				"title": "%command.pr.showDiffSinceLastReview.title%",
-				"icon": "$(git-pull-request-new-changes)"
+				"icon": "$(git-pull-request-new-changes)",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "pr.showDiffAll",
 				"title": "%command.pr.showDiffAll.title%",
-				"icon": "$(git-pull-request-go-to-changes)"
+				"icon": "$(git-pull-request-go-to-changes)",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "pr.checkoutByNumber",
 				"title": "%command.pr.checkoutByNumber.title%",
 				"category": "%command.pull.request.category%",
-				"icon": "$(symbol-numeric)"
+				"icon": "$(symbol-numeric)",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "review.openFile",
 				"title": "%command.review.openFile.title%",
-				"icon": "$(go-to-file)"
+				"icon": "$(go-to-file)",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "review.openLocalFile",
 				"title": "%command.review.openLocalFile.title%",
-				"icon": "$(go-to-file)"
+				"icon": "$(go-to-file)",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "pr.refreshList",
 				"title": "%command.pr.refreshList.title%",
 				"icon": "$(refresh)",
-				"category": "%command.pull.request.category%"
+				"category": "%command.pull.request.category%",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "pr.setFileListLayoutAsTree",
 				"title": "%command.pr.setFileListLayoutAsTree.title%",
 				"icon": "$(list-tree)",
-				"category": "%command.pull.request.category%"
+				"category": "%command.pull.request.category%",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "pr.setFileListLayoutAsFlat",
 				"title": "%command.pr.setFileListLayoutAsFlat.title%",
 				"icon": "$(list-flat)",
-				"category": "%command.pull.request.category%"
+				"category": "%command.pull.request.category%",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "pr.toggleHideViewedFiles",
 				"title": "%command.pr.toggleHideViewedFiles.title%",
 				"icon": "$(filter)",
-				"category": "%command.pull.request.category%"
+				"category": "%command.pull.request.category%",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "pr.refreshChanges",
 				"title": "%command.pr.refreshChanges.title%",
 				"icon": "$(refresh)",
-				"category": "%command.pull.request.category%"
+				"category": "%command.pull.request.category%",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "pr.configurePRViewlet",
 				"title": "%command.pr.configurePRViewlet.title%",
 				"category": "%command.pull.request.category%",
-				"icon": "$(gear)"
+				"icon": "$(gear)",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "pr.deleteLocalBranch",
 				"title": "%command.pr.deleteLocalBranch.title%",
-				"category": "%command.pull.request.category%"
+				"category": "%command.pull.request.category%",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "pr.signin",
 				"title": "%command.pr.signin.title%",
-				"category": "%command.pull.request.category%"
+				"category": "%command.pull.request.category%",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "pr.signinNoEnterprise",
 				"title": "%command.pr.signin.title%",
-				"category": "%command.pull.request.category%"
+				"category": "%command.pull.request.category%",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "pr.signinenterprise",
 				"title": "%command.pr.signinenterprise.title%",
-				"category": "%command.pull.request.category%"
+				"category": "%command.pull.request.category%",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "pr.selectEnterpriseAccount",
 				"title": "%command.pr.selectEnterpriseAccount.title%",
-				"category": "%command.pull.request.category%"
+				"category": "%command.pull.request.category%",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "pr.deleteLocalBranchesNRemotes",
 				"title": "%command.pr.deleteLocalBranchesNRemotes.title%",
-				"category": "%command.pull.request.category%"
+				"category": "%command.pull.request.category%",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "pr.createComment",
 				"title": "%command.pr.createComment.title%",
 				"category": "%command.pull.request.category%",
-				"enablement": "!commentIsEmpty"
+				"enablement": "config.azureDevOps.provider == github && (!commentIsEmpty)"
 			},
 			{
 				"command": "pr.createSingleComment",
 				"title": "%command.pr.createSingleComment.title%",
 				"category": "%command.pull.request.category%",
-				"enablement": "!commentIsEmpty"
+				"enablement": "config.azureDevOps.provider == github && (!commentIsEmpty)"
 			},
 			{
 				"command": "pr.makeSuggestion",
 				"title": "%command.pr.makeSuggestion.title%",
-				"category": "%command.pull.request.category%"
+				"category": "%command.pull.request.category%",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "pr.uploadFile",
 				"title": "%command.pr.uploadFile.title%",
 				"category": "%command.pull.request.category%",
-				"icon": "$(cloud-upload)"
+				"icon": "$(cloud-upload)",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "pr.startReview",
 				"title": "%command.pr.startReview.title%",
 				"category": "%command.pull.request.category%",
-				"enablement": "!commentIsEmpty"
+				"enablement": "config.azureDevOps.provider == github && (!commentIsEmpty)"
 			},
 			{
 				"command": "pr.editComment",
 				"title": "%command.pr.editComment.title%",
 				"category": "%command.pull.request.category%",
 				"icon": "$(edit)",
-				"enablement": "!(comment =~ /temporary/)"
+				"enablement": "config.azureDevOps.provider == github && (!(comment =~ /temporary/))"
 			},
 			{
 				"command": "pr.cancelEditComment",
 				"title": "%command.pr.cancelEditComment.title%",
-				"category": "%command.pull.request.category%"
+				"category": "%command.pull.request.category%",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "pr.saveComment",
 				"title": "%command.pr.saveComment.title%",
 				"category": "%command.pull.request.category%",
-				"enablement": "!commentIsEmpty"
+				"enablement": "config.azureDevOps.provider == github && (!commentIsEmpty)"
 			},
 			{
 				"command": "pr.deleteComment",
 				"title": "%command.pr.deleteComment.title%",
 				"category": "%command.pull.request.category%",
 				"icon": "$(trash)",
-				"enablement": "!(comment =~ /temporary/)"
+				"enablement": "config.azureDevOps.provider == github && (!(comment =~ /temporary/))"
 			},
 			{
 				"command": "pr.resolveReviewThread",
 				"title": "%command.pr.resolveReviewThread.title%",
 				"category": "%command.pull.request.category%",
-				"icon": "$(check)"
+				"icon": "$(check)",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "pr.unresolveReviewThread",
 				"title": "%command.pr.unresolveReviewThread.title%",
-				"category": "%command.pull.request.category%"
+				"category": "%command.pull.request.category%",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "pr.unresolveReviewThreadFromView",
 				"title": "%command.pr.unresolveReviewThread.title%",
 				"category": "%command.pull.request.category%",
-				"icon": "$(sync)"
+				"icon": "$(sync)",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "pr.diffOutdatedCommentWithHead",
 				"title": "%command.pr.diffOutdatedCommentWithHead.title%",
 				"category": "%command.pull.request.category%",
-				"icon": "$(git-compare)"
+				"icon": "$(git-compare)",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "pr.signinAndRefreshList",
 				"title": "%command.pr.signinAndRefreshList.title%",
-				"category": "%command.pull.request.category%"
+				"category": "%command.pull.request.category%",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "pr.configureRemotes",
 				"title": "%command.pr.configureRemotes.title%",
-				"category": "%command.pull.request.category%"
+				"category": "%command.pull.request.category%",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "pr.refreshActivePullRequest",
 				"title": "%command.pr.refreshActivePullRequest.title%",
 				"category": "%command.pull.request.category%",
-				"icon": "$(refresh)"
+				"icon": "$(refresh)",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "pr.markFileAsViewed",
 				"title": "%command.pr.markFileAsViewed.title%",
 				"category": "%command.pull.request.category%",
-				"icon": "$(pass)"
+				"icon": "$(pass)",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "pr.unmarkFileAsViewed",
 				"title": "%command.pr.unmarkFileAsViewed.title%",
 				"category": "%command.pull.request.category%",
-				"icon": "$(pass-filled)"
+				"icon": "$(pass-filled)",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "pr.openReview",
 				"title": "%command.pr.openReview.title%",
-				"category": "%command.pull.request.category%"
+				"category": "%command.pull.request.category%",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "pr.collapseAllComments",
 				"title": "%command.pr.collapseAllComments.title%",
 				"category": "%command.comments.category%",
-				"icon": "$(collapse-all)"
+				"icon": "$(collapse-all)",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "pr.editQuery",
 				"title": "%command.pr.editQuery.title%",
 				"category": "%command.pull.request.category%",
-				"icon": "$(edit)"
+				"icon": "$(edit)",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "pr.openPullsWebsite",
 				"title": "%command.pr.openPullsWebsite.title%",
 				"category": "%command.pull.request.category%",
-				"icon": "$(globe)"
+				"icon": "$(globe)",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "pr.resetViewedFiles",
 				"title": "%command.pr.resetViewedFiles.title%",
-				"category": "%command.pull.request.category%"
+				"category": "%command.pull.request.category%",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "pr.goToNextDiffInPr",
 				"title": "%command.pr.goToNextDiffInPr.title%",
-				"category": "%command.pull.request.category%"
+				"category": "%command.pull.request.category%",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "pr.goToPreviousDiffInPr",
 				"title": "%command.pr.goToPreviousDiffInPr.title%",
-				"category": "%command.pull.request.category%"
+				"category": "%command.pull.request.category%",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "pr.copyCommentLink",
 				"title": "%command.pr.copyCommentLink.title%",
 				"category": "%command.pull.request.category%",
 				"icon": "$(copy)",
-				"enablement": "!(comment =~ /temporary/)"
+				"enablement": "config.azureDevOps.provider == github && (!(comment =~ /temporary/))"
 			},
 			{
 				"command": "pr.applySuggestion",
 				"title": "%command.pr.applySuggestion.title%",
 				"category": "%command.pull.request.category%",
-				"icon": "$(replace)"
+				"icon": "$(replace)",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "pr.applySuggestionWithCopilot",
 				"title": "%command.pr.applySuggestionWithCopilot.title%",
 				"category": "%command.pull.request.category%",
-				"icon": "$(sparkle)"
+				"icon": "$(sparkle)",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "pr.addAssigneesToNewPr",
 				"title": "%command.pr.addAssigneesToNewPr.title%",
 				"category": "%command.pull.request.category%",
-				"icon": "$(account)"
+				"icon": "$(account)",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "pr.addReviewersToNewPr",
 				"title": "%command.pr.addReviewersToNewPr.title%",
 				"category": "%command.pull.request.category%",
-				"icon": "$(feedback)"
+				"icon": "$(feedback)",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "pr.addLabelsToNewPr",
 				"title": "%command.pr.addLabelsToNewPr.title%",
 				"category": "%command.pull.request.category%",
-				"icon": "$(tag)"
+				"icon": "$(tag)",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "pr.addMilestoneToNewPr",
 				"title": "%command.pr.addMilestoneToNewPr.title%",
 				"category": "%command.pull.request.category%",
-				"icon": "$(milestone)"
+				"icon": "$(milestone)",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "pr.addProjectsToNewPr",
 				"title": "%command.pr.addProjectsToNewPr.title%",
 				"category": "%command.pull.request.category%",
-				"icon": "$(github-project)"
+				"icon": "$(github-project)",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "pr.preReview",
 				"title": "%command.pr.preReview.title%",
 				"category": "%command.pull.request.category%",
-				"enablement": "!pr:preReviewing && !pr:creating",
+				"enablement": "config.azureDevOps.provider == github && (!pr:preReviewing && !pr:creating)",
 				"icon": "$(comment)"
 			},
 			{
 				"command": "pr.addFileComment",
 				"title": "%command.pr.addFileComment.title%",
 				"category": "%command.pull.request.category%",
-				"icon": "$(comment)"
+				"icon": "$(comment)",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "pr.checkoutFromReadonlyFile",
 				"title": "%command.pr.pick.title%",
-				"category": "%command.pull.request.category%"
+				"category": "%command.pull.request.category%",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "pr.resolveConflict",
 				"title": "%command.pr.resolveConflict.title%",
-				"category": "%command.pull.request.category%"
+				"category": "%command.pull.request.category%",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "pr.acceptMerge",
 				"title": "%command.pr.acceptMerge.title%",
-				"category": "%command.pull.request.category%"
+				"category": "%command.pull.request.category%",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "pr.closeRelatedEditors",
 				"title": "%command.pr.closeRelatedEditors.title%",
-				"category": "%command.pull.request.category%"
+				"category": "%command.pull.request.category%",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "pr.toggleEditorCommentingOn",
 				"title": "%command.pr.toggleEditorCommentingOn.title%",
 				"category": "%command.pull.request.category%",
-				"icon": "$(eye-closed)"
+				"icon": "$(eye-closed)",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "pr.toggleEditorCommentingOff",
 				"title": "%command.pr.toggleEditorCommentingOff.title%",
 				"category": "%command.pull.request.category%",
-				"icon": "$(eye)"
+				"icon": "$(eye)",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "pr.checkoutFromDescription",
 				"title": "%command.pr.checkoutFromDescription.title%",
 				"category": "%command.pull.request.category%",
-				"icon": "$(git-compare)"
+				"icon": "$(git-compare)",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "pr.checkoutFromChat",
 				"title": "%command.pr.checkoutFromChat.title%",
 				"category": "%command.pull.request.category%",
-				"icon": "$(git-compare)"
+				"icon": "$(git-compare)",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "pr.applyChangesFromDescription",
 				"title": "%command.pr.applyChangesFromDescription.title%",
 				"category": "%command.pull.request.category%",
-				"icon": "$(git-stash-apply)"
+				"icon": "$(git-stash-apply)",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "pr.applyChangesFromChat",
 				"title": "%command.pr.applyChangesFromChat.title%",
 				"category": "%command.pull.request.category%",
-				"icon": "$(git-stash-apply)"
+				"icon": "$(git-stash-apply)",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "pr.checkoutOnVscodeDevFromDescription",
 				"title": "%command.pr.checkoutOnVscodeDevFromDescription.title%",
-				"category": "%command.pull.request.category%"
+				"category": "%command.pull.request.category%",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "pr.checkoutOnCodespacesFromDescription",
 				"title": "%command.pr.checkoutOnCodespacesFromDescription.title%",
-				"category": "%command.pull.request.category%"
+				"category": "%command.pull.request.category%",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "pr.openSessionLogFromDescription",
 				"title": "%command.pr.openSessionLogFromDescription.title%",
-				"category": "%command.pull.request.category%"
+				"category": "%command.pull.request.category%",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "review.diffWithPrHead",
 				"title": "%command.review.diffWithPrHead.title%",
-				"category": "%command.pull.request.category%"
+				"category": "%command.pull.request.category%",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "review.diffLocalWithPrHead",
 				"title": "%command.review.diffLocalWithPrHead.title%",
-				"category": "%command.pull.request.category%"
+				"category": "%command.pull.request.category%",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "review.approve",
 				"title": "%command.review.approve.title%",
-				"category": "%command.pull.request.category%"
+				"category": "%command.pull.request.category%",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "review.comment",
 				"title": "%command.review.comment.title%",
 				"category": "%command.pull.request.category%",
-				"enablement": "github:reviewCommentCommentEnabled"
+				"enablement": "config.azureDevOps.provider == github && (github:reviewCommentCommentEnabled)"
 			},
 			{
 				"command": "review.requestChanges",
 				"title": "%command.review.requestChanges.title%",
 				"category": "%command.pull.request.category%",
-				"enablement": "github:reviewRequestChangesEnabled"
+				"enablement": "config.azureDevOps.provider == github && (github:reviewRequestChangesEnabled)"
 			},
 			{
 				"command": "review.approveOnDotCom",
 				"title": "%command.review.approveOnDotCom.title%",
-				"category": "%command.pull.request.category%"
+				"category": "%command.pull.request.category%",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "pr.addAttestationCommit",
 				"title": "%command.pr.addAttestationCommit.title%",
-				"category": "%command.pull.request.category%"
+				"category": "%command.pull.request.category%",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "review.requestChangesOnDotCom",
 				"title": "%command.review.requestChangesOnDotCom.title%",
-				"category": "%command.pull.request.category%"
+				"category": "%command.pull.request.category%",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "review.approveDescription",
 				"title": "%command.review.approve.title%",
-				"category": "%command.pull.request.category%"
+				"category": "%command.pull.request.category%",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "review.commentDescription",
 				"title": "%command.review.comment.title%",
 				"category": "%command.pull.request.category%",
-				"enablement": "github:reviewCommentCommentEnabled"
+				"enablement": "config.azureDevOps.provider == github && (github:reviewCommentCommentEnabled)"
 			},
 			{
 				"command": "review.requestChangesDescription",
 				"title": "%command.review.requestChanges.title%",
 				"category": "%command.pull.request.category%",
-				"enablement": "github:reviewRequestChangesEnabled"
+				"enablement": "config.azureDevOps.provider == github && (github:reviewRequestChangesEnabled)"
 			},
 			{
 				"command": "review.approveOnDotComDescription",
 				"title": "%command.review.approveOnDotCom.title%",
-				"category": "%command.pull.request.category%"
+				"category": "%command.pull.request.category%",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "review.requestChangesOnDotComDescription",
 				"title": "%command.review.requestChangesOnDotCom.title%",
-				"category": "%command.pull.request.category%"
+				"category": "%command.pull.request.category%",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "review.createSuggestionsFromChanges",
 				"title": "%command.review.createSuggestionsFromChanges.title%",
 				"icon": "$(comment)",
-				"category": "%command.pull.request.category%"
+				"category": "%command.pull.request.category%",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "review.createSuggestionFromChange",
 				"title": "%command.review.createSuggestionFromChange.title%",
 				"icon": "$(comment)",
-				"category": "%command.pull.request.category%"
+				"category": "%command.pull.request.category%",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "review.copyPrLink",
 				"title": "%command.review.copyPrLink.title%",
-				"category": "%command.pull.request.category%"
+				"category": "%command.pull.request.category%",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "pr.createPrMenuCreate",
 				"title": "%command.pr.createPrMenuCreate.title%",
-				"category": "%command.pull.request.category%"
+				"category": "%command.pull.request.category%",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "pr.createPrMenuDraft",
 				"title": "%command.pr.createPrMenuDraft.title%",
-				"category": "%command.pull.request.category%"
+				"category": "%command.pull.request.category%",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "pr.createPrMenuMergeWhenReady",
 				"title": "%command.pr.createPrMenuMergeWhenReady.title%",
-				"category": "%command.pull.request.category%"
+				"category": "%command.pull.request.category%",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "pr.createPrMenuMerge",
 				"title": "%command.pr.createPrMenuMerge.title%",
-				"category": "%command.pull.request.category%"
+				"category": "%command.pull.request.category%",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "pr.createPrMenuSquash",
 				"title": "%command.pr.createPrMenuSquash.title%",
-				"category": "%command.pull.request.category%"
+				"category": "%command.pull.request.category%",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "pr.createPrMenuRebase",
 				"title": "%command.pr.createPrMenuRebase.title%",
-				"category": "%command.pull.request.category%"
+				"category": "%command.pull.request.category%",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "issue.openDescription",
 				"title": "%command.issue.openDescription.title%",
-				"category": "%command.issues.category%"
+				"category": "%command.issues.category%",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "issue.openIssueOnGitHub",
 				"title": "%command.issue.openIssueOnGitHub.title%",
 				"category": "%command.issues.category%",
-				"icon": "$(globe)"
+				"icon": "$(globe)",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "issue.createIssueFromSelection",
 				"title": "%command.issue.createIssueFromSelection.title%",
-				"category": "%command.issues.category%"
+				"category": "%command.issues.category%",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "issue.createIssueFromClipboard",
 				"title": "%command.issue.createIssueFromClipboard.title%",
-				"category": "%command.issues.category%"
+				"category": "%command.issues.category%",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "pr.copyVscodeDevPrLink",
 				"title": "%command.pr.copyVscodeDevPrLink.title%",
-				"category": "%command.issues.category%"
+				"category": "%command.issues.category%",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "pr.copyPrLink",
 				"title": "%command.pr.copyPrLink.title%",
-				"category": "%command.issues.category%"
+				"category": "%command.issues.category%",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "pr.refreshComments",
 				"title": "%command.pr.refreshComments.title%",
 				"category": "%command.pull.request.category%",
-				"icon": "$(refresh)"
+				"icon": "$(refresh)",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "issue.copyGithubDevLinkWithoutRange",
 				"title": "%command.issue.copyGithubDevLink.title%",
 				"category": "%command.issues.category%",
-				"enablement": "!isInEmbeddedEditor"
+				"enablement": "config.azureDevOps.provider == github && (!isInEmbeddedEditor)"
 			},
 			{
 				"command": "issue.copyGithubDevLinkFile",
 				"title": "%command.issue.copyGithubDevLink.title%",
 				"category": "%command.issues.category%",
-				"enablement": "!isInEmbeddedEditor"
+				"enablement": "config.azureDevOps.provider == github && (!isInEmbeddedEditor)"
 			},
 			{
 				"command": "issue.copyGithubDevLink",
 				"title": "%command.issue.copyGithubDevLink.title%",
 				"category": "%command.issues.category%",
-				"enablement": "!isInEmbeddedEditor"
+				"enablement": "config.azureDevOps.provider == github && (!isInEmbeddedEditor)"
 			},
 			{
 				"command": "issue.copyGithubPermalink",
 				"title": "%command.issue.copyGithubPermalink.title%",
 				"category": "%command.issues.category%",
-				"enablement": "!isInEmbeddedEditor"
+				"enablement": "config.azureDevOps.provider == github && (!isInEmbeddedEditor)"
 			},
 			{
 				"command": "issue.copyGithubHeadLink",
 				"title": "%command.issue.copyGithubHeadLink.title%",
 				"category": "%command.issues.category%",
-				"enablement": "!isInEmbeddedEditor"
+				"enablement": "config.azureDevOps.provider == github && (!isInEmbeddedEditor)"
 			},
 			{
 				"command": "issue.copyGithubPermalinkWithoutRange",
 				"title": "%command.issue.copyGithubPermalink.title%",
 				"category": "%command.issues.category%",
-				"enablement": "!isInEmbeddedEditor"
+				"enablement": "config.azureDevOps.provider == github && (!isInEmbeddedEditor)"
 			},
 			{
 				"command": "issue.copyGithubHeadLinkWithoutRange",
 				"title": "%command.issue.copyGithubHeadLink.title%",
 				"category": "%command.issues.category%",
-				"enablement": "!isInEmbeddedEditor"
+				"enablement": "config.azureDevOps.provider == github && (!isInEmbeddedEditor)"
 			},
 			{
 				"command": "issue.copyMarkdownGithubPermalink",
 				"title": "%command.issue.copyMarkdownGithubPermalink.title%",
 				"category": "%command.issues.category%",
-				"enablement": "!isInEmbeddedEditor"
+				"enablement": "config.azureDevOps.provider == github && (!isInEmbeddedEditor)"
 			},
 			{
 				"command": "issue.copyMarkdownGithubPermalinkWithoutRange",
 				"title": "%command.issue.copyMarkdownGithubPermalink.title%",
 				"category": "%command.issues.category%",
-				"enablement": "!isInEmbeddedEditor"
+				"enablement": "config.azureDevOps.provider == github && (!isInEmbeddedEditor)"
 			},
 			{
 				"command": "issue.openGithubPermalink",
 				"title": "%command.issue.openGithubPermalink.title%",
-				"category": "%command.issues.category%"
+				"category": "%command.issues.category%",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "issue.openIssue",
 				"title": "%command.issue.openIssue.title%",
 				"category": "%command.issues.category%",
-				"icon": "$(globe)"
+				"icon": "$(globe)",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "issue.copyIssueNumber",
 				"title": "%command.issue.copyIssueNumber.title%",
-				"category": "%command.issues.category%"
+				"category": "%command.issues.category%",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "issue.copyIssueUrl",
 				"title": "%command.issue.copyIssueUrl.title%",
-				"category": "%command.issues.category%"
+				"category": "%command.issues.category%",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "issue.refresh",
 				"title": "%command.issue.refresh.title%",
 				"category": "%command.issues.category%",
-				"icon": "$(refresh)"
+				"icon": "$(refresh)",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "issue.suggestRefresh",
 				"title": "%command.issue.suggestRefresh.title%",
-				"category": "%command.issues.category%"
+				"category": "%command.issues.category%",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "issue.startWorking",
 				"title": "%command.issue.startWorking.title%",
 				"category": "%command.issues.category%",
-				"icon": "$(arrow-right)"
+				"icon": "$(arrow-right)",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "issue.startWorkingBranchDescriptiveTitle",
 				"title": "%command.issue.startWorkingBranchDescriptiveTitle.title%",
 				"category": "%command.issues.category%",
-				"icon": "$(arrow-right)"
+				"icon": "$(arrow-right)",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "issue.continueWorking",
 				"title": "%command.issue.continueWorking.title%",
 				"category": "%command.issues.category%",
-				"icon": "$(arrow-right)"
+				"icon": "$(arrow-right)",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "issue.startWorkingBranchPrompt",
 				"title": "%command.issue.startWorkingBranchPrompt.title%",
-				"category": "%command.issues.category%"
+				"category": "%command.issues.category%",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "issue.stopWorking",
 				"title": "%command.issue.stopWorking.title%",
 				"category": "%command.issues.category%",
-				"icon": "$(primitive-square)"
+				"icon": "$(primitive-square)",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "issue.stopWorkingBranchDescriptiveTitle",
 				"title": "%command.issue.stopWorkingBranchDescriptiveTitle.title%",
 				"category": "%command.issues.category%",
-				"icon": "$(primitive-square)"
+				"icon": "$(primitive-square)",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "issue.statusBar",
 				"title": "%command.issue.statusBar.title%",
-				"category": "%command.issues.category%"
+				"category": "%command.issues.category%",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "issue.getCurrent",
 				"title": "%command.issue.getCurrent.title%",
-				"category": "%command.issues.category%"
+				"category": "%command.issues.category%",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "issue.editQuery",
 				"title": "%command.issue.editQuery.title%",
 				"category": "%command.issues.category%",
-				"icon": "$(edit)"
+				"icon": "$(edit)",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "issue.createIssue",
 				"title": "%command.issue.createIssue.title%",
 				"category": "%command.issues.category%",
-				"icon": "$(plus)"
+				"icon": "$(plus)",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "issue.createIssueFromFile",
 				"title": "%command.issue.createIssueFromFile.title%",
 				"icon": "$(check)",
-				"enablement": "!issues.creatingFromFile"
+				"enablement": "config.azureDevOps.provider == github && (!issues.creatingFromFile)"
 			},
 			{
 				"command": "issue.issueCompletion",
-				"title": "%command.issue.issueCompletion.title%"
+				"title": "%command.issue.issueCompletion.title%",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "issue.userCompletion",
-				"title": "%command.issue.userCompletion.title%"
+				"title": "%command.issue.userCompletion.title%",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "issue.signinAndRefreshList",
 				"title": "%command.issue.signinAndRefreshList.title%",
-				"category": "%command.issues.category%"
+				"category": "%command.issues.category%",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "issue.goToLinkedCode",
 				"title": "%command.issue.goToLinkedCode.title%",
-				"category": "%command.issues.category%"
+				"category": "%command.issues.category%",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "issues.openIssuesWebsite",
 				"title": "%command.issues.openIssuesWebsite.title%",
 				"category": "%command.issues.category%",
-				"icon": "$(globe)"
+				"icon": "$(globe)",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "issue.chatSummarizeIssue",
 				"title": "%command.issue.chatSummarizeIssue.title%",
 				"category": "%command.issues.category%",
-				"icon": "$(copilot)"
+				"icon": "$(copilot)",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "issue.chatSuggestFix",
 				"title": "%command.issue.chatSuggestFix.title%",
 				"category": "%command.issues.category%",
-				"icon": "$(sparkle)"
+				"icon": "$(sparkle)",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "issue.assignToCodingAgent",
 				"title": "%command.issue.assignToCodingAgent.title%",
 				"category": "%command.issues.category%",
 				"icon": "$(send-to-remote-agent)",
-				"enablement": "config.githubPullRequests.codingAgent.enabled"
+				"enablement": "config.azureDevOps.provider == github && (config.githubPullRequests.codingAgent.enabled)"
 			},
 			{
 				"command": "issues.configureIssuesViewlet",
 				"title": "%command.issues.configureIssuesViewlet.title%",
 				"category": "%command.issues.category%",
-				"icon": "$(gear)"
+				"icon": "$(gear)",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "notifications.refresh",
 				"title": "%command.notifications.refresh.title%",
 				"category": "%command.notifications.category%",
-				"icon": "$(refresh)"
+				"icon": "$(refresh)",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "notifications.loadMore",
 				"title": "%command.notifications.loadMore.title%",
-				"category": "%command.notifications.category%"
+				"category": "%command.notifications.category%",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "notifications.sortByTimestamp",
 				"title": "%command.notifications.sortByTimestamp.title%",
-				"category": "%command.notifications.category%"
+				"category": "%command.notifications.category%",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "notifications.sortByPriority",
 				"title": "%command.notifications.sortByPriority.title%",
-				"category": "%command.notifications.category%"
+				"category": "%command.notifications.category%",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "notification.openOnGitHub",
 				"title": "%command.notifications.openOnGitHub.title%",
 				"category": "%command.notifications.category%",
-				"icon": "$(globe)"
+				"icon": "$(globe)",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "notification.chatSummarizeNotification",
 				"title": "%command.notification.chatSummarizeNotification.title%",
 				"category": "%command.notifications.category%",
-				"icon": "$(copilot)"
+				"icon": "$(copilot)",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "notification.markAsRead",
 				"title": "%command.notifications.markAsRead.title%",
 				"category": "%command.notifications.category%",
-				"icon": "$(mail-read)"
+				"icon": "$(mail-read)",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "notification.markAsDone",
 				"title": "%command.notifications.markAsDone.title%",
 				"category": "%command.notifications.category%",
-				"icon": "$(check-all)"
+				"icon": "$(check-all)",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "notifications.markPullRequestsAsRead",
 				"title": "%command.notifications.markPullRequestsAsRead.title%",
 				"category": "%command.notifications.category%",
-				"icon": "$(git-pull-request-done)"
+				"icon": "$(git-pull-request-done)",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "notifications.markPullRequestsAsDone",
 				"title": "%command.notifications.markPullRequestsAsDone.title%",
 				"category": "%command.notifications.category%",
-				"icon": "$(git-pull-request-done)"
+				"icon": "$(git-pull-request-done)",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "notifications.configureNotificationsViewlet",
 				"title": "%command.notifications.configureNotificationsViewlet.title%",
 				"category": "%command.notifications.category%",
-				"icon": "$(gear)"
+				"icon": "$(gear)",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "pr.checkoutChatSessionPullRequest",
 				"title": "%command.pr.checkoutChatSessionPullRequest.title%",
-				"category": "%command.pull.request.category%"
+				"category": "%command.pull.request.category%",
+				"enablement": "config.azureDevOps.provider == github"
 			},
 			{
 				"command": "pr.generateTitleAndDescription",
 				"title": "%command.pr.generateTitleAndDescription.title%",
-				"category": "%command.pull.request.category%"
+				"category": "%command.pull.request.category%",
+				"enablement": "config.azureDevOps.provider == github"
 			}
 		],
 		"viewsWelcome": [
+			{
+				"view": "azureDevOps.pullRequests",
+				"contents": "%azureDevOps.welcome%"
+			},
+			{
+				"view": "azureDevOps.workItems",
+				"contents": "%azureDevOps.welcomeWorkItems%"
+			},
 			{
 				"view": "github:login",
 				"when": "(ReposManagerStateContext == NeedsAuthentication && github:hasGitHubRemotes) && !isSessionsWindow",
@@ -2108,1726 +2514,1886 @@
 			{
 				"key": "ctrl+shift+space",
 				"command": "issue.suggestRefresh",
-				"when": "(suggestWidgetVisible) && !isSessionsWindow"
+				"when": "config.azureDevOps.provider == github && ((suggestWidgetVisible) && !isSessionsWindow)"
 			},
 			{
 				"key": "ctrl+s",
 				"mac": "cmd+s",
 				"command": "issue.createIssueFromFile",
-				"when": "(resourceScheme == newIssue && config.files.autoSave != off) && !isSessionsWindow"
+				"when": "config.azureDevOps.provider == github && ((resourceScheme == newIssue && config.files.autoSave != off) && !isSessionsWindow)"
 			},
 			{
 				"key": "ctrl+enter",
 				"mac": "cmd+enter",
 				"command": "issue.createIssueFromFile",
-				"when": "(resourceScheme == newIssue) && !isSessionsWindow"
+				"when": "config.azureDevOps.provider == github && ((resourceScheme == newIssue) && !isSessionsWindow)"
 			},
 			{
 				"key": "ctrl+k m",
 				"mac": "cmd+k m",
 				"command": "pr.makeSuggestion",
-				"when": "commentEditorFocused"
+				"when": "config.azureDevOps.provider == github && (commentEditorFocused)"
 			},
 			{
 				"key": "ctrl+r",
 				"mac": "cmd+r",
 				"command": "pr.refreshDescription",
-				"when": "(activeWebviewPanelId == 'PullRequestOverview') && !isSessionsWindow"
+				"when": "config.azureDevOps.provider == github && ((activeWebviewPanelId == 'PullRequestOverview') && !isSessionsWindow)"
 			},
 			{
 				"key": "shift+alt+r",
 				"mac": "shift+alt+cmd+r",
 				"command": "pr.revealFileInOS",
-				"when": "(focusedView =~ /(pr|prStatus):github/ && listFocus) && !isSessionsWindow"
+				"when": "config.azureDevOps.provider == github && ((focusedView =~ /(pr|prStatus):github/ && listFocus) && !isSessionsWindow)"
 			}
 		],
 		"menus": {
 			"commandPalette": [
 				{
+					"command": "azureDevOps.openPullRequest",
+					"when": "config.azureDevOps.provider == azureDevOps"
+				},
+				{
+					"command": "azureDevOps.toggleFileViewed",
+					"when": "false"
+				},
+				{
+					"command": "azureDevOps.applySuggestion",
+					"when": "false"
+				},
+				{
+					"command": "azureDevOps.startReview",
+					"when": "false"
+				},
+				{
+					"command": "azureDevOps.openNotification",
+					"when": "false"
+				},
+				{
+					"command": "azureDevOps.submitReview",
+					"when": "config.azureDevOps.provider == azureDevOps"
+				},
+				{
+					"command": "azureDevOps.markNotificationsRead",
+					"when": "config.azureDevOps.provider == azureDevOps"
+				},
+				{
+					"command": "azureDevOps.reply",
+					"when": "false"
+				},
+				{
+					"command": "azureDevOps.openDiff",
+					"when": "false"
+				},
+				{
+					"command": "azureDevOps.resolveThread",
+					"when": "false"
+				},
+				{
+					"command": "azureDevOps.reopenThread",
+					"when": "false"
+				},
+				{
+					"command": "azureDevOps.editComment",
+					"when": "false"
+				},
+				{
+					"command": "azureDevOps.deleteComment",
+					"when": "false"
+				},
+				{
 					"command": "pr.deleteLocalBranchesNRemotes",
-					"when": "!isSessionsWindow"
+					"when": "config.azureDevOps.provider == github && (!isSessionsWindow)"
 				},
 				{
 					"command": "pr.diffOutdatedCommentWithHead",
-					"when": "!isSessionsWindow"
+					"when": "config.azureDevOps.provider == github && (!isSessionsWindow)"
 				},
 				{
 					"command": "pr.checkoutOnCodespacesFromDescription",
-					"when": "!isSessionsWindow"
+					"when": "config.azureDevOps.provider == github && (!isSessionsWindow)"
 				},
 				{
 					"command": "issue.openIssueOnGitHub",
-					"when": "!isSessionsWindow"
+					"when": "config.azureDevOps.provider == github && (!isSessionsWindow)"
 				},
 				{
 					"command": "issue.createIssueFromSelection",
-					"when": "!isSessionsWindow"
+					"when": "config.azureDevOps.provider == github && (!isSessionsWindow)"
 				},
 				{
 					"command": "issue.createIssueFromClipboard",
-					"when": "!isSessionsWindow"
+					"when": "config.azureDevOps.provider == github && (!isSessionsWindow)"
 				},
 				{
 					"command": "github.api.preloadPullRequest",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "pr.addAttestationCommit",
-					"when": "(config.githubPullRequests.enableAttestationCommits && (!isWeb || remoteName)) && !isSessionsWindow"
+					"when": "config.azureDevOps.provider == github && ((config.githubPullRequests.enableAttestationCommits && (!isWeb || remoteName)) && !isSessionsWindow)"
 				},
 				{
 					"command": "pr.configureRemotes",
-					"when": "(gitHubOpenRepositoryCount != 0) && !isSessionsWindow"
+					"when": "config.azureDevOps.provider == github && ((gitHubOpenRepositoryCount != 0) && !isSessionsWindow)"
 				},
 				{
 					"command": "pr.configurePRViewlet",
-					"when": "(gitHubOpenRepositoryCount != 0) && !isSessionsWindow"
+					"when": "config.azureDevOps.provider == github && ((gitHubOpenRepositoryCount != 0) && !isSessionsWindow)"
 				},
 				{
 					"command": "pr.pick",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "pr.checkoutFromReadonlyFile",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "pr.openChanges",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "pr.pickOnVscodeDev",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "pr.pickOnCodespaces",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "pr.pickInWorktree",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "pr.pickInWorktreeFromDescription",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "pr.exit",
-					"when": "(github:inReviewMode) && !isSessionsWindow"
+					"when": "config.azureDevOps.provider == github && ((github:inReviewMode) && !isSessionsWindow)"
 				},
 				{
 					"command": "pr.dismissNotification",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "pr.markAllCopilotNotificationsAsRead",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "pr.resetViewedFiles",
-					"when": "(github:inReviewMode) && !isSessionsWindow"
+					"when": "config.azureDevOps.provider == github && ((github:inReviewMode) && !isSessionsWindow)"
 				},
 				{
 					"command": "review.openFile",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "review.openLocalFile",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "pr.create",
-					"when": "(gitHubOpenRepositoryCount != 0 && github:authenticated) && !isSessionsWindow"
+					"when": "config.azureDevOps.provider == github && ((gitHubOpenRepositoryCount != 0 && github:authenticated) && !isSessionsWindow)"
 				},
 				{
 					"command": "pr.pushAndCreate",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "pr.merge",
-					"when": "(gitHubOpenRepositoryCount != 0 && github:inReviewMode) && !isSessionsWindow"
+					"when": "config.azureDevOps.provider == github && ((gitHubOpenRepositoryCount != 0 && github:inReviewMode) && !isSessionsWindow)"
 				},
 				{
 					"command": "pr.readyForReview",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "pr.readyForReviewDescription",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "pr.readyForReviewAndMergeDescription",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "pr.readyForReviewAndMerge",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "pr.openPullRequestOnGitHub",
-					"when": "(gitHubOpenRepositoryCount != 0 && github:inReviewMode) && !isSessionsWindow"
+					"when": "config.azureDevOps.provider == github && ((gitHubOpenRepositoryCount != 0 && github:inReviewMode) && !isSessionsWindow)"
 				},
 				{
 					"command": "pr.addToStack",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "pr.openAllDiffs",
-					"when": "(gitHubOpenRepositoryCount != 0 && github:inReviewMode) && !isSessionsWindow"
+					"when": "config.azureDevOps.provider == github && ((gitHubOpenRepositoryCount != 0 && github:inReviewMode) && !isSessionsWindow)"
 				},
 				{
 					"command": "pr.refreshDescription",
-					"when": "(gitHubOpenRepositoryCount != 0 && github:inReviewMode) && !isSessionsWindow"
+					"when": "config.azureDevOps.provider == github && ((gitHubOpenRepositoryCount != 0 && github:inReviewMode) && !isSessionsWindow)"
 				},
 				{
 					"command": "pr.openFileOnGitHub",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "pr.revealFileInOS",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "pr.openOriginalFile",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "pr.openModifiedFile",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "pr.refreshPullRequest",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "pr.deleteLocalBranch",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "pr.openDiffView",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "pr.openDiffViewFromEditor",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "pr.openDescriptionToTheSide",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "pr.openDescription",
-					"when": "(gitHubOpenRepositoryCount != 0 && github:inReviewMode) && !isSessionsWindow"
+					"when": "config.azureDevOps.provider == github && ((gitHubOpenRepositoryCount != 0 && github:inReviewMode) && !isSessionsWindow)"
 				},
 				{
 					"command": "pr.focusDescriptionInput",
-					"when": "(github:pullRequestDescriptionVisible) && !isSessionsWindow"
+					"when": "config.azureDevOps.provider == github && ((github:pullRequestDescriptionVisible) && !isSessionsWindow)"
 				},
 				{
 					"command": "pr.showDiffSinceLastReview",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "pr.showDiffAll",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "pr.closeRelatedEditors",
-					"when": "(gitHubOpenRepositoryCount != 0) && !isSessionsWindow"
+					"when": "config.azureDevOps.provider == github && ((gitHubOpenRepositoryCount != 0) && !isSessionsWindow)"
 				},
 				{
 					"command": "pr.toggleEditorCommentingOn",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "pr.toggleEditorCommentingOff",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "pr.checkoutFromDescription",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "pr.checkoutFromChat",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "pr.applyChangesFromDescription",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "pr.applyChangesFromChat",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "pr.checkoutChatSessionPullRequest",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "pr.checkoutOnVscodeDevFromDescription",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "pr.openSessionLogFromDescription",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "review.approve",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "review.comment",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "review.requestChanges",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "review.approveOnDotCom",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "review.requestChangesOnDotCom",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "review.approveDescription",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "review.commentDescription",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "review.requestChangesDescription",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "review.approveOnDotComDescription",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "review.requestChangesOnDotComDescription",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "review.createSuggestionsFromChanges",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "review.createSuggestionFromChange",
-					"when": "(activeEditor == workbench.editors.textDiffEditor && (resourcePath in github:unviewedFiles || resourcePath in github:viewedFiles)) && !isSessionsWindow"
+					"when": "config.azureDevOps.provider == github && ((activeEditor == workbench.editors.textDiffEditor && (resourcePath in github:unviewedFiles || resourcePath in github:viewedFiles)) && !isSessionsWindow)"
 				},
 				{
 					"command": "pr.refreshList",
-					"when": "(gitHubOpenRepositoryCount != 0 && github:authenticated && github:hasGitHubRemotes) && !isSessionsWindow"
+					"when": "config.azureDevOps.provider == github && ((gitHubOpenRepositoryCount != 0 && github:authenticated && github:hasGitHubRemotes) && !isSessionsWindow)"
 				},
 				{
 					"command": "pr.setFileListLayoutAsTree",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "pr.setFileListLayoutAsFlat",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "pr.toggleHideViewedFiles",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "pr.refreshChanges",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "pr.signin",
-					"when": "(gitHubOpenRepositoryCount != 0 && github:hasGitHubRemotes) && !isSessionsWindow"
+					"when": "config.azureDevOps.provider == github && ((gitHubOpenRepositoryCount != 0 && github:hasGitHubRemotes) && !isSessionsWindow)"
 				},
 				{
 					"command": "pr.signinNoEnterprise",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "pr.signinenterprise",
-					"when": "(gitHubOpenRepositoryCount != 0 && github:hasGitHubRemotes) && !isSessionsWindow"
+					"when": "config.azureDevOps.provider == github && ((gitHubOpenRepositoryCount != 0 && github:hasGitHubRemotes) && !isSessionsWindow)"
 				},
 				{
 					"command": "pr.selectEnterpriseAccount",
-					"when": "github:hasEnterpriseUris && !isSessionsWindow"
+					"when": "config.azureDevOps.provider == github && (github:hasEnterpriseUris && !isSessionsWindow)"
 				},
 				{
 					"command": "pr.signinAndRefreshList",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "pr.copyCommitHash",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "pr.createComment",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "pr.createSingleComment",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "pr.makeSuggestion",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "pr.uploadFile",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "pr.startReview",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "pr.editComment",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "pr.cancelEditComment",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "pr.saveComment",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "pr.deleteComment",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "pr.unresolveReviewThread",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "pr.unresolveReviewThreadFromView",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "pr.resolveReviewThread",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "pr.openReview",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "pr.editQuery",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "pr.markFileAsViewed",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "pr.unmarkFileAsViewed",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "pr.checkoutByNumber",
-					"when": "(gitHubOpenRepositoryCount != 0 && github:initialized && github:authenticated) && !isSessionsWindow"
+					"when": "config.azureDevOps.provider == github && ((gitHubOpenRepositoryCount != 0 && github:initialized && github:authenticated) && !isSessionsWindow)"
 				},
 				{
 					"command": "pr.collapseAllComments",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "pr.copyVscodeDevPrLink",
-					"when": "(github:inReviewMode && remoteName != codespaces && embedderIdentifier != github.dev) && !isSessionsWindow"
+					"when": "config.azureDevOps.provider == github && ((github:inReviewMode && remoteName != codespaces && embedderIdentifier != github.dev) && !isSessionsWindow)"
 				},
 				{
 					"command": "pr.copyPrLink",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "pr.goToNextDiffInPr",
-					"when": "(activeEditor == workbench.editors.textDiffEditor && resourcePath in github:unviewedFiles) && !isSessionsWindow"
+					"when": "config.azureDevOps.provider == github && ((activeEditor == workbench.editors.textDiffEditor && resourcePath in github:unviewedFiles) && !isSessionsWindow)"
 				},
 				{
 					"command": "pr.goToNextDiffInPr",
-					"when": "(activeEditor == workbench.editors.textDiffEditor && resourcePath in github:viewedFiles) && !isSessionsWindow"
+					"when": "config.azureDevOps.provider == github && ((activeEditor == workbench.editors.textDiffEditor && resourcePath in github:viewedFiles) && !isSessionsWindow)"
 				},
 				{
 					"command": "pr.goToPreviousDiffInPr",
-					"when": "(activeEditor == workbench.editors.textDiffEditor && resourcePath in github:unviewedFiles) && !isSessionsWindow"
+					"when": "config.azureDevOps.provider == github && ((activeEditor == workbench.editors.textDiffEditor && resourcePath in github:unviewedFiles) && !isSessionsWindow)"
 				},
 				{
 					"command": "pr.goToPreviousDiffInPr",
-					"when": "(activeEditor == workbench.editors.textDiffEditor && resourcePath in github:viewedFiles) && !isSessionsWindow"
+					"when": "config.azureDevOps.provider == github && ((activeEditor == workbench.editors.textDiffEditor && resourcePath in github:viewedFiles) && !isSessionsWindow)"
 				},
 				{
 					"command": "pr.copyCommentLink",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "pr.addAssigneesToNewPr",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "pr.addReviewersToNewPr",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "pr.addLabelsToNewPr",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "pr.addMilestoneToNewPr",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "pr.addProjectsToNewPr",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "pr.preReview",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "pr.addFileComment",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "review.diffWithPrHead",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "review.diffLocalWithPrHead",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "pr.createPrMenuCreate",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "pr.createPrMenuDraft",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "pr.createPrMenuMergeWhenReady",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "pr.createPrMenuMerge",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "pr.createPrMenuSquash",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "pr.createPrMenuRebase",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "pr.refreshComments",
-					"when": "(gitHubOpenRepositoryCount != 0) && !isSessionsWindow"
+					"when": "config.azureDevOps.provider == github && ((gitHubOpenRepositoryCount != 0) && !isSessionsWindow)"
 				},
 				{
 					"command": "pr.resolveConflict",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "pr.acceptMerge",
-					"when": "(isMergeResultEditor && mergeEditorBaseUri =~ /^(githubpr|gitpr):/) && !isSessionsWindow"
+					"when": "config.azureDevOps.provider == github && ((isMergeResultEditor && mergeEditorBaseUri =~ /^(githubpr|gitpr):/) && !isSessionsWindow)"
 				},
 				{
 					"command": "issue.openDescription",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "issue.copyGithubPermalink",
-					"when": "(github:hasGitHubRemotes) && !isSessionsWindow"
+					"when": "config.azureDevOps.provider == github && ((github:hasGitHubRemotes) && !isSessionsWindow)"
 				},
 				{
 					"command": "issue.copyGithubHeadLink",
-					"when": "(github:hasGitHubRemotes) && !isSessionsWindow"
+					"when": "config.azureDevOps.provider == github && ((github:hasGitHubRemotes) && !isSessionsWindow)"
 				},
 				{
 					"command": "issue.copyMarkdownGithubPermalink",
-					"when": "(github:hasGitHubRemotes) && !isSessionsWindow"
+					"when": "config.azureDevOps.provider == github && ((github:hasGitHubRemotes) && !isSessionsWindow)"
 				},
 				{
 					"command": "issue.openGithubPermalink",
-					"when": "(github:hasGitHubRemotes) && !isSessionsWindow"
+					"when": "config.azureDevOps.provider == github && ((github:hasGitHubRemotes) && !isSessionsWindow)"
 				},
 				{
 					"command": "issue.openIssue",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "issue.assignToCodingAgent",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "issue.copyIssueNumber",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "issue.copyIssueUrl",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "issue.refresh",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "issue.suggestRefresh",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "issue.startWorking",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "issue.startWorkingBranchDescriptiveTitle",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "issue.continueWorking",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "issue.startWorkingBranchPrompt",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "issue.stopWorking",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "issue.stopWorkingBranchDescriptiveTitle",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "issue.statusBar",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "issue.getCurrent",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "issue.editQuery",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "issue.createIssue",
-					"when": "(github:hasGitHubRemotes && github:authenticated) && !isSessionsWindow"
+					"when": "config.azureDevOps.provider == github && ((github:hasGitHubRemotes && github:authenticated) && !isSessionsWindow)"
 				},
 				{
 					"command": "issue.createIssueFromFile",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "issue.issueCompletion",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "issue.userCompletion",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "issue.signinAndRefreshList",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "issue.goToLinkedCode",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "issue.copyGithubDevLinkWithoutRange",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "issue.copyGithubDevLinkFile",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "issue.copyGithubDevLink",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "issue.copyGithubPermalinkWithoutRange",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "issue.copyMarkdownGithubPermalinkWithoutRange",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "issue.copyGithubHeadLinkWithoutRange",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "issues.configureIssuesViewlet",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "pr.refreshActivePullRequest",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "pr.applySuggestion",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "pr.applySuggestionWithCopilot",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "pr.openPullsWebsite",
-					"when": "(github:hasGitHubRemotes) && !isSessionsWindow"
+					"when": "config.azureDevOps.provider == github && ((github:hasGitHubRemotes) && !isSessionsWindow)"
 				},
 				{
 					"command": "issues.openIssuesWebsite",
-					"when": "(github:hasGitHubRemotes) && !isSessionsWindow"
+					"when": "config.azureDevOps.provider == github && ((github:hasGitHubRemotes) && !isSessionsWindow)"
 				},
 				{
 					"command": "issue.chatSummarizeIssue",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "issue.chatSuggestFix",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "notifications.sortByTimestamp",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "notifications.sortByPriority",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "notifications.loadMore",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "notifications.refresh",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "notification.openOnGitHub",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "notification.markAsRead",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "notification.markAsDone",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "notification.chatSummarizeNotification",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "notifications.markPullRequestsAsRead",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "notifications.markPullRequestsAsDone",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "notifications.configureNotificationsViewlet",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
 				},
 				{
 					"command": "review.copyPrLink",
-					"when": "(github:inReviewMode) && !isSessionsWindow"
+					"when": "config.azureDevOps.provider == github && ((github:inReviewMode) && !isSessionsWindow)"
 				},
 				{
 					"command": "pr.generateTitleAndDescription",
-					"when": "false"
+					"when": "config.azureDevOps.provider == github && (false)"
+				},
+				{
+					"command": "azureDevOps.signIn",
+					"when": "config.azureDevOps.provider == azureDevOps"
+				},
+				{
+					"command": "azureDevOps.signOut",
+					"when": "config.azureDevOps.provider == azureDevOps"
+				},
+				{
+					"command": "azureDevOps.refresh",
+					"when": "config.azureDevOps.provider == azureDevOps"
+				},
+				{
+					"command": "azureDevOps.createPullRequest",
+					"when": "config.azureDevOps.provider == azureDevOps"
+				},
+				{
+					"command": "azureDevOps.createWorkItem",
+					"when": "config.azureDevOps.provider == azureDevOps"
+				},
+				{
+					"command": "azureDevOps.pullRequestActions",
+					"when": "config.azureDevOps.provider == azureDevOps"
+				},
+				{
+					"command": "azureDevOps.workItemActions",
+					"when": "config.azureDevOps.provider == azureDevOps"
 				}
 			],
 			"view/title": [
 				{
+					"command": "azureDevOps.refresh",
+					"when": "view == azureDevOps.notifications",
+					"group": "navigation@1"
+				},
+				{
+					"command": "azureDevOps.markNotificationsRead",
+					"when": "view == azureDevOps.notifications",
+					"group": "navigation@2"
+				},
+				{
+					"command": "azureDevOps.refresh",
+					"when": "view == azureDevOps.pullRequests || view == azureDevOps.workItems",
+					"group": "navigation@2"
+				},
+				{
+					"command": "azureDevOps.createPullRequest",
+					"when": "view == azureDevOps.pullRequests",
+					"group": "navigation@1"
+				},
+				{
+					"command": "azureDevOps.signIn",
+					"when": "view == azureDevOps.pullRequests",
+					"group": "signIn"
+				},
+				{
+					"command": "azureDevOps.createWorkItem",
+					"when": "view == azureDevOps.workItems",
+					"group": "navigation@1"
+				},
+				{
 					"command": "pr.create",
-					"when": "(gitHubOpenRepositoryCount != 0 && github:initialized && view == pr:github) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((gitHubOpenRepositoryCount != 0 && github:initialized && view == pr:github) && !isSessionsWindow)",
 					"group": "navigation@1"
 				},
 				{
 					"command": "pr.refreshList",
-					"when": "(gitHubOpenRepositoryCount != 0 && github:initialized && view == pr:github) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((gitHubOpenRepositoryCount != 0 && github:initialized && view == pr:github) && !isSessionsWindow)",
 					"group": "navigation@2"
 				},
 				{
 					"command": "pr.openPullsWebsite",
-					"when": "(gitHubOpenRepositoryCount != 0 && github:initialized && view == pr:github) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((gitHubOpenRepositoryCount != 0 && github:initialized && view == pr:github) && !isSessionsWindow)",
 					"group": "overflow@1"
 				},
 				{
 					"command": "pr.checkoutByNumber",
-					"when": "(gitHubOpenRepositoryCount != 0 && github:initialized && view == pr:github) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((gitHubOpenRepositoryCount != 0 && github:initialized && view == pr:github) && !isSessionsWindow)",
 					"group": "overflow@2"
 				},
 				{
 					"command": "pr.configurePRViewlet",
-					"when": "(gitHubOpenRepositoryCount != 0 && github:initialized && view == pr:github) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((gitHubOpenRepositoryCount != 0 && github:initialized && view == pr:github) && !isSessionsWindow)",
 					"group": "overflow@3"
 				},
 				{
 					"command": "pr.refreshChanges",
-					"when": "(view == prStatus:github) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((view == prStatus:github) && !isSessionsWindow)",
 					"group": "navigation@2"
 				},
 				{
 					"command": "pr.setFileListLayoutAsTree",
-					"when": "(view == prStatus:github && fileListLayout:flat) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((view == prStatus:github && fileListLayout:flat) && !isSessionsWindow)",
 					"group": "navigation1"
 				},
 				{
 					"command": "pr.setFileListLayoutAsFlat",
-					"when": "(view == prStatus:github && !fileListLayout:flat) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((view == prStatus:github && !fileListLayout:flat) && !isSessionsWindow)",
 					"group": "navigation1"
 				},
 				{
 					"command": "pr.toggleHideViewedFiles",
-					"when": "(view == prStatus:github) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((view == prStatus:github) && !isSessionsWindow)",
 					"group": "navigation1"
 				},
 				{
 					"command": "pr.toggleEditorCommentingOn",
-					"when": "(view == prStatus:github && !commentingEnabled) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((view == prStatus:github && !commentingEnabled) && !isSessionsWindow)",
 					"group": "navigation@0"
 				},
 				{
 					"command": "pr.toggleEditorCommentingOff",
-					"when": "(view == prStatus:github && commentingEnabled) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((view == prStatus:github && commentingEnabled) && !isSessionsWindow)",
 					"group": "navigation@0"
 				},
 				{
 					"command": "issue.createIssue",
-					"when": "(view == issues:github && github:hasGitHubRemotes) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((view == issues:github && github:hasGitHubRemotes) && !isSessionsWindow)",
 					"group": "navigation@1"
 				},
 				{
 					"command": "issue.refresh",
-					"when": "(view == issues:github) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((view == issues:github) && !isSessionsWindow)",
 					"group": "navigation@2"
 				},
 				{
 					"command": "issues.openIssuesWebsite",
-					"when": "(gitHubOpenRepositoryCount != 0 && github:initialized && view == issues:github) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((gitHubOpenRepositoryCount != 0 && github:initialized && view == issues:github) && !isSessionsWindow)",
 					"group": "overflow@1"
 				},
 				{
 					"command": "issues.configureIssuesViewlet",
-					"when": "(gitHubOpenRepositoryCount != 0 && github:initialized && view == issues:github) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((gitHubOpenRepositoryCount != 0 && github:initialized && view == issues:github) && !isSessionsWindow)",
 					"group": "overflow@2"
 				},
 				{
 					"command": "pr.refreshActivePullRequest",
-					"when": "(view == github:activePullRequest && github:hasGitHubRemotes) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((view == github:activePullRequest && github:hasGitHubRemotes) && !isSessionsWindow)",
 					"group": "navigation@1"
 				},
 				{
 					"command": "pr.openDescription",
-					"when": "(view == github:activePullRequest && github:hasGitHubRemotes) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((view == github:activePullRequest && github:hasGitHubRemotes) && !isSessionsWindow)",
 					"group": "navigation@2"
 				},
 				{
 					"command": "pr.openPullRequestOnGitHub",
-					"when": "(view == github:activePullRequest && github:hasGitHubRemotes) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((view == github:activePullRequest && github:hasGitHubRemotes) && !isSessionsWindow)",
 					"group": "navigation@3"
 				},
 				{
 					"command": "pr.addAssigneesToNewPr",
-					"when": "(view == github:createPullRequestWebview && github:createPrPermissions != READ && github:createPrPermissions) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((view == github:createPullRequestWebview && github:createPrPermissions != READ && github:createPrPermissions) && !isSessionsWindow)",
 					"group": "navigation@1"
 				},
 				{
 					"command": "pr.addReviewersToNewPr",
-					"when": "(view == github:createPullRequestWebview && github:createPrPermissions != READ && github:createPrPermissions) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((view == github:createPullRequestWebview && github:createPrPermissions != READ && github:createPrPermissions) && !isSessionsWindow)",
 					"group": "navigation@2"
 				},
 				{
 					"command": "pr.addLabelsToNewPr",
-					"when": "(view == github:createPullRequestWebview && github:createPrPermissions != READ && github:createPrPermissions) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((view == github:createPullRequestWebview && github:createPrPermissions != READ && github:createPrPermissions) && !isSessionsWindow)",
 					"group": "navigation@3"
 				},
 				{
 					"command": "pr.addMilestoneToNewPr",
-					"when": "(view == github:createPullRequestWebview && github:createPrPermissions != READ && github:createPrPermissions) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((view == github:createPullRequestWebview && github:createPrPermissions != READ && github:createPrPermissions) && !isSessionsWindow)",
 					"group": "navigation@4"
 				},
 				{
 					"command": "pr.addProjectsToNewPr",
-					"when": "(view == github:createPullRequestWebview && github:createPrPermissions != READ && github:createPrPermissions) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((view == github:createPullRequestWebview && github:createPrPermissions != READ && github:createPrPermissions) && !isSessionsWindow)",
 					"group": "navigation@5"
 				},
 				{
 					"command": "pr.refreshComments",
-					"when": "(view == workbench.panel.comments) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((view == workbench.panel.comments) && !isSessionsWindow)",
 					"group": "navigation"
 				},
 				{
 					"command": "notifications.sortByTimestamp",
-					"when": "(gitHubOpenRepositoryCount != 0 && github:initialized && view == notifications:github) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((gitHubOpenRepositoryCount != 0 && github:initialized && view == notifications:github) && !isSessionsWindow)",
 					"group": "sortNotifications@1"
 				},
 				{
 					"command": "notifications.sortByPriority",
-					"when": "(gitHubOpenRepositoryCount != 0 && github:initialized && view == notifications:github) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((gitHubOpenRepositoryCount != 0 && github:initialized && view == notifications:github) && !isSessionsWindow)",
 					"group": "sortNotifications@2"
 				},
 				{
 					"command": "notifications.configureNotificationsViewlet",
-					"when": "(view == notifications:github) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((view == notifications:github) && !isSessionsWindow)",
 					"group": "sortNotifications@3"
 				},
 				{
 					"command": "notifications.markPullRequestsAsRead",
-					"when": "(gitHubOpenRepositoryCount != 0 && github:initialized && view == notifications:github && config.githubPullRequests.experimental.notificationsMarkPullRequests == markAsRead) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((gitHubOpenRepositoryCount != 0 && github:initialized && view == notifications:github && config.githubPullRequests.experimental.notificationsMarkPullRequests == markAsRead) && !isSessionsWindow)",
 					"group": "navigation@0"
 				},
 				{
 					"command": "notifications.markPullRequestsAsDone",
-					"when": "(gitHubOpenRepositoryCount != 0 && github:initialized && view == notifications:github && config.githubPullRequests.experimental.notificationsMarkPullRequests == markAsDone) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((gitHubOpenRepositoryCount != 0 && github:initialized && view == notifications:github && config.githubPullRequests.experimental.notificationsMarkPullRequests == markAsDone) && !isSessionsWindow)",
 					"group": "navigation@0"
 				},
 				{
 					"command": "notifications.refresh",
-					"when": "(gitHubOpenRepositoryCount != 0 && github:initialized && view == notifications:github) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((gitHubOpenRepositoryCount != 0 && github:initialized && view == notifications:github) && !isSessionsWindow)",
 					"group": "navigation@1"
 				}
 			],
 			"view/item/context": [
 				{
+					"command": "azureDevOps.toggleFileViewed",
+					"when": "view == azureDevOps.pullRequests && viewItem == azureFile",
+					"group": "1_review"
+				},
+				{
+					"command": "azureDevOps.pullRequestActions",
+					"when": "view == azureDevOps.pullRequests && viewItem == azurePullRequest",
+					"group": "inline"
+				},
+				{
 					"command": "pr.addToStack",
-					"when": "(view == pr:github && viewItem =~ /pullrequest.*:stackable/ && github:canAddToStack) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((view == pr:github && viewItem =~ /pullrequest.*:stackable/ && github:canAddToStack) && !isSessionsWindow)",
 					"group": "0_stack@1"
 				},
 				{
 					"command": "pr.pick",
-					"when": "(view == pr:github && viewItem =~ /(pullrequest(:local)?:nonactive)/) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((view == pr:github && viewItem =~ /(pullrequest(:local)?:nonactive)/) && !isSessionsWindow)",
 					"group": "1_pullrequest@1"
 				},
 				{
 					"command": "pr.exit",
-					"when": "(view == pr:github && viewItem =~ /pullrequest(:local)?:active/) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((view == pr:github && viewItem =~ /pullrequest(:local)?:active/) && !isSessionsWindow)",
 					"group": "1_pullrequest@1"
 				},
 				{
 					"command": "pr.pickOnVscodeDev",
-					"when": "(view == pr:github && viewItem =~ /pullrequest(:local)?:nonactive/ && (!isWeb || remoteName != codespaces && virtualWorkspace != vscode-vfs)) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((view == pr:github && viewItem =~ /pullrequest(:local)?:nonactive/ && (!isWeb || remoteName != codespaces && virtualWorkspace != vscode-vfs)) && !isSessionsWindow)",
 					"group": "1_pullrequest@2"
 				},
 				{
 					"command": "pr.pickOnCodespaces",
-					"when": "(view == pr:github && viewItem =~ /pullrequest(:local)?:nonactive/ && (!isWeb || remoteName != codespaces && virtualWorkspace != vscode-vfs)) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((view == pr:github && viewItem =~ /pullrequest(:local)?:nonactive/ && (!isWeb || remoteName != codespaces && virtualWorkspace != vscode-vfs)) && !isSessionsWindow)",
 					"group": "1_pullrequest@3"
 				},
 				{
 					"command": "pr.pickInWorktree",
-					"when": "(view == pr:github && viewItem =~ /pullrequest(:local)?:nonactive/ && !isWeb) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((view == pr:github && viewItem =~ /pullrequest(:local)?:nonactive/ && !isWeb) && !isSessionsWindow)",
 					"group": "1_pullrequest@4"
 				},
 				{
 					"command": "pr.openChanges",
-					"when": "(view =~ /(pr|prStatus):github/ && viewItem =~ /(pullrequest|description)/) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((view =~ /(pr|prStatus):github/ && viewItem =~ /(pullrequest|description)/) && !isSessionsWindow)",
 					"group": "2_pullrequest@1"
 				},
 				{
 					"command": "pr.openDescriptionToTheSide",
 					"group": "2_pullrequest@2",
-					"when": "(view =~ /(pr|prStatus):github/ && viewItem =~ /(pullrequest|description)/) && !isSessionsWindow"
+					"when": "config.azureDevOps.provider == github && ((view =~ /(pr|prStatus):github/ && viewItem =~ /(pullrequest|description)/) && !isSessionsWindow)"
 				},
 				{
 					"command": "pr.openPullRequestOnGitHub",
-					"when": "(view == pr:github && viewItem =~ /pullrequest/) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((view == pr:github && viewItem =~ /pullrequest/) && !isSessionsWindow)",
 					"group": "2_pullrequest@3"
 				},
 				{
 					"command": "pr.refreshPullRequest",
-					"when": "(view == pr:github && viewItem =~ /pullrequest/) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((view == pr:github && viewItem =~ /pullrequest/) && !isSessionsWindow)",
 					"group": "3_pullrequest@1"
 				},
 				{
 					"command": "pr.deleteLocalBranch",
-					"when": "(view == pr:github && viewItem =~ /pullrequest:local:nonactive/) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((view == pr:github && viewItem =~ /pullrequest:local:nonactive/) && !isSessionsWindow)",
 					"group": "4_pullrequest@4"
 				},
 				{
 					"command": "pr.dismissNotification",
-					"when": "(view == pr:github && viewItem =~ /pullrequest(.*):notification/) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((view == pr:github && viewItem =~ /pullrequest(.*):notification/) && !isSessionsWindow)",
 					"group": "4_pullrequest@5"
 				},
 				{
 					"command": "pr.markAllCopilotNotificationsAsRead",
-					"when": "(view == pr:github && viewItem =~ /copilot-query/) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((view == pr:github && viewItem =~ /copilot-query/) && !isSessionsWindow)",
 					"group": "0_category@1"
 				},
 				{
 					"command": "issue.chatSummarizeIssue",
-					"when": "(view == pr:github && viewItem =~ /pullrequest/ && github.copilot-chat.activated && config.githubPullRequests.experimental.chat && !config.chat.disableAIFeatures) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((view == pr:github && viewItem =~ /pullrequest/ && github.copilot-chat.activated && config.githubPullRequests.experimental.chat && !config.chat.disableAIFeatures) && !isSessionsWindow)",
 					"group": "5_pullrequest@2"
 				},
 				{
 					"command": "pr.pick",
-					"when": "(view == pr:github && viewItem =~ /(pullrequest(:local)?:nonactive)/) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((view == pr:github && viewItem =~ /(pullrequest(:local)?:nonactive)/) && !isSessionsWindow)",
 					"group": "inline@1"
 				},
 				{
 					"command": "pr.openChanges",
-					"when": "(view =~ /(pr|prStatus):github/ && viewItem =~ /(pullrequest|description)/) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((view =~ /(pr|prStatus):github/ && viewItem =~ /(pullrequest|description)/) && !isSessionsWindow)",
 					"group": "inline@0"
 				},
 				{
 					"command": "pr.showDiffSinceLastReview",
 					"group": "inline@1",
-					"when": "(view =~ /(pr|prStatus):github/ && viewItem =~ /(pullrequest|description):(active|nonactive):hasChangesSinceReview:showingAllChanges/) && !isSessionsWindow"
+					"when": "config.azureDevOps.provider == github && ((view =~ /(pr|prStatus):github/ && viewItem =~ /(pullrequest|description):(active|nonactive):hasChangesSinceReview:showingAllChanges/) && !isSessionsWindow)"
 				},
 				{
 					"command": "pr.showDiffAll",
 					"group": "inline@1",
-					"when": "(view =~ /(pr|prStatus):github/ && viewItem =~ /(pullrequest|description):(active|nonactive):hasChangesSinceReview:showingChangesSinceReview/) && !isSessionsWindow"
+					"when": "config.azureDevOps.provider == github && ((view =~ /(pr|prStatus):github/ && viewItem =~ /(pullrequest|description):(active|nonactive):hasChangesSinceReview:showingChangesSinceReview/) && !isSessionsWindow)"
 				},
 				{
 					"command": "notification.chatSummarizeNotification",
 					"group": "issues_0@0",
-					"when": "(view == notifications:github && (viewItem == 'Issue' || viewItem == 'PullRequest') && config.githubPullRequests.experimental.chat && !config.chat.disableAIFeatures) && !isSessionsWindow"
+					"when": "config.azureDevOps.provider == github && ((view == notifications:github && (viewItem == 'Issue' || viewItem == 'PullRequest') && config.githubPullRequests.experimental.chat && !config.chat.disableAIFeatures) && !isSessionsWindow)"
 				},
 				{
 					"command": "notification.openOnGitHub",
 					"group": "issues_0@1",
-					"when": "(view == notifications:github && (viewItem == 'Issue' || viewItem == 'PullRequest')) && !isSessionsWindow"
+					"when": "config.azureDevOps.provider == github && ((view == notifications:github && (viewItem == 'Issue' || viewItem == 'PullRequest')) && !isSessionsWindow)"
 				},
 				{
 					"command": "notification.markAsRead",
 					"group": "inline@3",
-					"when": "(view == notifications:github && (viewItem == 'Issue' || viewItem == 'PullRequest')) && !isSessionsWindow"
+					"when": "config.azureDevOps.provider == github && ((view == notifications:github && (viewItem == 'Issue' || viewItem == 'PullRequest')) && !isSessionsWindow)"
 				},
 				{
 					"command": "notification.markAsRead",
 					"group": "issues_0@2",
-					"when": "(view == notifications:github && (viewItem == 'Issue' || viewItem == 'PullRequest')) && !isSessionsWindow"
+					"when": "config.azureDevOps.provider == github && ((view == notifications:github && (viewItem == 'Issue' || viewItem == 'PullRequest')) && !isSessionsWindow)"
 				},
 				{
 					"command": "notification.markAsDone",
 					"group": "inline@4",
-					"when": "(view == notifications:github && (viewItem == 'Issue' || viewItem == 'PullRequest')) && !isSessionsWindow"
+					"when": "config.azureDevOps.provider == github && ((view == notifications:github && (viewItem == 'Issue' || viewItem == 'PullRequest')) && !isSessionsWindow)"
 				},
 				{
 					"command": "notification.markAsDone",
 					"group": "issues_0@3",
-					"when": "(view == notifications:github && (viewItem == 'Issue' || viewItem == 'PullRequest')) && !isSessionsWindow"
+					"when": "config.azureDevOps.provider == github && ((view == notifications:github && (viewItem == 'Issue' || viewItem == 'PullRequest')) && !isSessionsWindow)"
 				},
 				{
 					"command": "pr.openPullRequestOnGitHub",
 					"group": "inline@3",
-					"when": "(view == prStatus:github && viewItem =~ /description/ && github:activePRCount >= 2) && !isSessionsWindow"
+					"when": "config.azureDevOps.provider == github && ((view == prStatus:github && viewItem =~ /description/ && github:activePRCount >= 2) && !isSessionsWindow)"
 				},
 				{
 					"command": "pr.copyCommitHash",
-					"when": "(view == prStatus:github && viewItem =~ /commit/) && !isSessionsWindow"
+					"when": "config.azureDevOps.provider == github && ((view == prStatus:github && viewItem =~ /commit/) && !isSessionsWindow)"
 				},
 				{
 					"command": "review.openFile",
 					"group": "inline@0",
-					"when": "(openDiffOnClick && showInlineOpenFileAction && view == prStatus:github && viewItem =~ /filechange(?!:DELETE)/) && !isSessionsWindow"
+					"when": "config.azureDevOps.provider == github && ((openDiffOnClick && showInlineOpenFileAction && view == prStatus:github && viewItem =~ /filechange(?!:DELETE)/) && !isSessionsWindow)"
 				},
 				{
 					"command": "pr.openDiffView",
 					"group": "inline@0",
-					"when": "(!openDiffOnClick && showInlineOpenFileAction && view == prStatus:github && viewItem =~ /filechange(?!:DELETE)/) && !isSessionsWindow"
+					"when": "config.azureDevOps.provider == github && ((!openDiffOnClick && showInlineOpenFileAction && view == prStatus:github && viewItem =~ /filechange(?!:DELETE)/) && !isSessionsWindow)"
 				},
 				{
 					"command": "pr.openFileOnGitHub",
-					"when": "(view =~ /(pr|prStatus):github/ && viewItem =~ /filechange/) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((view =~ /(pr|prStatus):github/ && viewItem =~ /filechange/) && !isSessionsWindow)",
 					"group": "0_open@0"
 				},
 				{
 					"command": "pr.revealFileInOS",
-					"when": "(view =~ /(pr|prStatus):github/ && viewItem =~ /filechange(?!:(ADD|DELETE))/) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((view =~ /(pr|prStatus):github/ && viewItem =~ /filechange(?!:(ADD|DELETE))/) && !isSessionsWindow)",
 					"group": "0_open@1"
 				},
 				{
 					"command": "pr.openOriginalFile",
-					"when": "(view =~ /(pr|prStatus):github/ && viewItem =~ /filechange:(MODIFY|DELETE)/) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((view =~ /(pr|prStatus):github/ && viewItem =~ /filechange:(MODIFY|DELETE)/) && !isSessionsWindow)",
 					"group": "0_open@2"
 				},
 				{
 					"command": "pr.openModifiedFile",
-					"when": "(view =~ /(pr|prStatus):github/ && viewItem =~ /filechange:MODIFY/) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((view =~ /(pr|prStatus):github/ && viewItem =~ /filechange:MODIFY/) && !isSessionsWindow)",
 					"group": "0_open@3"
 				},
 				{
 					"command": "review.diffWithPrHead",
 					"group": "1_diff@0",
-					"when": "(openDiffOnClick && view == prStatus:github && viewItem =~ /filechange(?!:DELETE)/) && !isSessionsWindow"
+					"when": "config.azureDevOps.provider == github && ((openDiffOnClick && view == prStatus:github && viewItem =~ /filechange(?!:DELETE)/) && !isSessionsWindow)"
 				},
 				{
 					"command": "review.diffLocalWithPrHead",
 					"group": "1_diff@1",
-					"when": "(openDiffOnClick && view == prStatus:github && viewItem =~ /filechange(?!:DELETE)/) && !isSessionsWindow"
+					"when": "config.azureDevOps.provider == github && ((openDiffOnClick && view == prStatus:github && viewItem =~ /filechange(?!:DELETE)/) && !isSessionsWindow)"
 				},
 				{
 					"command": "pr.editQuery",
-					"when": "(view == pr:github && viewItem == query) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((view == pr:github && viewItem == query) && !isSessionsWindow)",
 					"group": "inline"
 				},
 				{
 					"command": "pr.editQuery",
-					"when": "(view == pr:github && viewItem == query) && !isSessionsWindow"
+					"when": "config.azureDevOps.provider == github && ((view == pr:github && viewItem == query) && !isSessionsWindow)"
 				},
 				{
 					"command": "issue.openIssue",
-					"when": "(view == issues:github && viewItem =~ /^(link)?(current|continue)?issue/) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((view == issues:github && viewItem =~ /^(link)?(current|continue)?issue/) && !isSessionsWindow)",
 					"group": "issues_0@1"
 				},
 				{
 					"command": "issue.goToLinkedCode",
-					"when": "(view == issues:github && viewItem =~ /^link(current|continue)?issue/) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((view == issues:github && viewItem =~ /^link(current|continue)?issue/) && !isSessionsWindow)",
 					"group": "issues_0@0"
 				},
 				{
 					"command": "issue.startWorking",
-					"when": "(view == issues:github && viewItem =~ /^(link)?issue/ && config.githubIssues.useBranchForIssues != on) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((view == issues:github && viewItem =~ /^(link)?issue/ && config.githubIssues.useBranchForIssues != on) && !isSessionsWindow)",
 					"group": "inline@2"
 				},
 				{
 					"command": "issue.startWorkingBranchDescriptiveTitle",
-					"when": "(view == issues:github && viewItem =~ /^(link)?issue/ && config.githubIssues.useBranchForIssues == on) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((view == issues:github && viewItem =~ /^(link)?issue/ && config.githubIssues.useBranchForIssues == on) && !isSessionsWindow)",
 					"group": "inline@2"
 				},
 				{
 					"command": "issue.startWorking",
-					"when": "(view == issues:github && viewItem =~ /^(link)?continueissue/ && config.githubIssues.useBranchForIssues != on) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((view == issues:github && viewItem =~ /^(link)?continueissue/ && config.githubIssues.useBranchForIssues != on) && !isSessionsWindow)",
 					"group": "inline@2"
 				},
 				{
 					"command": "issue.startWorkingBranchDescriptiveTitle",
-					"when": "(view == issues:github && viewItem =~ /^(link)?continueissue/ && config.githubIssues.useBranchForIssues == on) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((view == issues:github && viewItem =~ /^(link)?continueissue/ && config.githubIssues.useBranchForIssues == on) && !isSessionsWindow)",
 					"group": "inline@2"
 				},
 				{
 					"command": "issue.startWorking",
 					"alt": "issue.startWorkingBranchPrompt",
-					"when": "(view == issues:github && viewItem =~ /^(link)?issue/) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((view == issues:github && viewItem =~ /^(link)?issue/) && !isSessionsWindow)",
 					"group": "issues_0@2"
 				},
 				{
 					"command": "issue.continueWorking",
-					"when": "(view == issues:github && viewItem =~ /^(link)?continueissue/) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((view == issues:github && viewItem =~ /^(link)?continueissue/) && !isSessionsWindow)",
 					"group": "issues_0@2"
 				},
 				{
 					"command": "pr.create",
-					"when": "(view == issues:github && viewItem =~ /^(link)?currentissue/) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((view == issues:github && viewItem =~ /^(link)?currentissue/) && !isSessionsWindow)",
 					"group": "issues_0@2"
 				},
 				{
 					"command": "issue.stopWorking",
-					"when": "(view == issues:github && viewItem =~ /^(link)?currentissue/) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((view == issues:github && viewItem =~ /^(link)?currentissue/) && !isSessionsWindow)",
 					"group": "issues_0@3"
 				},
 				{
 					"command": "issue.stopWorking",
-					"when": "(view == issues:github && viewItem =~ /^(link)?currentissue/ && config.githubIssues.useBranchForIssues != on) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((view == issues:github && viewItem =~ /^(link)?currentissue/ && config.githubIssues.useBranchForIssues != on) && !isSessionsWindow)",
 					"group": "inline@1"
 				},
 				{
 					"command": "issue.stopWorkingBranchDescriptiveTitle",
-					"when": "(view == issues:github && viewItem =~ /^(link)?currentissue/ && config.githubIssues.useBranchForIssues == on) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((view == issues:github && viewItem =~ /^(link)?currentissue/ && config.githubIssues.useBranchForIssues == on) && !isSessionsWindow)",
 					"group": "inline@1"
 				},
 				{
 					"command": "issue.chatSummarizeIssue",
-					"when": "(view == issues:github && viewItem =~ /^(link)?(current|continue)?issue/ && github.copilot-chat.activated && config.githubPullRequests.experimental.chat && !config.chat.disableAIFeatures) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((view == issues:github && viewItem =~ /^(link)?(current|continue)?issue/ && github.copilot-chat.activated && config.githubPullRequests.experimental.chat && !config.chat.disableAIFeatures) && !isSessionsWindow)",
 					"group": "issues_1@0"
 				},
 				{
 					"command": "issue.chatSuggestFix",
-					"when": "(view == issues:github && viewItem =~ /^(link)?(current|continue)?issue/ && github.copilot-chat.activated && config.githubPullRequests.experimental.chat && !config.chat.disableAIFeatures) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((view == issues:github && viewItem =~ /^(link)?(current|continue)?issue/ && github.copilot-chat.activated && config.githubPullRequests.experimental.chat && !config.chat.disableAIFeatures) && !isSessionsWindow)",
 					"group": "issues_1@1"
 				},
 				{
 					"command": "issue.assignToCodingAgent",
-					"when": "(view == issues:github && viewItem =~ /^(link)?(current|continue)?issue/ && config.githubPullRequests.codingAgent.enabled && !config.chat.disableAIFeatures) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((view == issues:github && viewItem =~ /^(link)?(current|continue)?issue/ && config.githubPullRequests.codingAgent.enabled && !config.chat.disableAIFeatures) && !isSessionsWindow)",
 					"group": "issues_1@2"
 				},
 				{
 					"command": "issue.copyIssueNumber",
-					"when": "(view == issues:github && viewItem =~ /^(link)?(current|continue)?issue/) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((view == issues:github && viewItem =~ /^(link)?(current|continue)?issue/) && !isSessionsWindow)",
 					"group": "issues_2@1"
 				},
 				{
 					"command": "issue.copyIssueUrl",
-					"when": "(view == issues:github && viewItem =~ /^(link)?(current|continue)?issue/) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((view == issues:github && viewItem =~ /^(link)?(current|continue)?issue/) && !isSessionsWindow)",
 					"group": "issues_2@2"
 				},
 				{
 					"command": "issue.editQuery",
-					"when": "(view == issues:github && viewItem == query) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((view == issues:github && viewItem == query) && !isSessionsWindow)",
 					"group": "inline"
 				},
 				{
 					"command": "issue.editQuery",
-					"when": "(view == issues:github && viewItem == query) && !isSessionsWindow"
+					"when": "config.azureDevOps.provider == github && ((view == issues:github && viewItem == query) && !isSessionsWindow)"
 				}
 			],
 			"commentsView/commentThread/context": [
 				{
 					"command": "pr.diffOutdatedCommentWithHead",
 					"group": "inline@0",
-					"when": "commentController =~ /^github-(browse|review)/ && commentThread =~ /outdated/"
+					"when": "config.azureDevOps.provider == github && (commentController =~ /^github-(browse|review)/ && commentThread =~ /outdated/)"
 				},
 				{
 					"command": "pr.resolveReviewThread",
 					"group": "inline@1",
-					"when": "commentController =~ /^github-(browse|review)/ && commentThread =~ /canResolve/"
+					"when": "config.azureDevOps.provider == github && (commentController =~ /^github-(browse|review)/ && commentThread =~ /canResolve/)"
 				},
 				{
 					"command": "pr.unresolveReviewThreadFromView",
 					"group": "inline@1",
-					"when": "commentController =~ /^github-(browse|review)/ && commentThread =~ /canUnresolve/"
+					"when": "config.azureDevOps.provider == github && (commentController =~ /^github-(browse|review)/ && commentThread =~ /canUnresolve/)"
 				},
 				{
 					"command": "pr.diffOutdatedCommentWithHead",
 					"group": "context@0",
-					"when": "commentController =~ /^github-(browse|review)/ && commentThread =~ /outdated/"
+					"when": "config.azureDevOps.provider == github && (commentController =~ /^github-(browse|review)/ && commentThread =~ /outdated/)"
 				},
 				{
 					"command": "pr.resolveReviewThread",
 					"group": "context@1",
-					"when": "commentController =~ /^github-(browse|review)/ && commentThread =~ /canResolve/"
+					"when": "config.azureDevOps.provider == github && (commentController =~ /^github-(browse|review)/ && commentThread =~ /canResolve/)"
 				},
 				{
 					"command": "pr.unresolveReviewThreadFromView",
 					"group": "context@1",
-					"when": "commentController =~ /^github-(browse|review)/ && commentThread =~ /canUnresolve/"
+					"when": "config.azureDevOps.provider == github && (commentController =~ /^github-(browse|review)/ && commentThread =~ /canUnresolve/)"
 				},
 				{
 					"command": "pr.applySuggestionWithCopilot",
 					"group": "context@2",
-					"when": "commentController =~ /^github-review/ && !config.chat.disableAIFeatures"
+					"when": "config.azureDevOps.provider == github && (commentController =~ /^github-review/ && !config.chat.disableAIFeatures)"
 				}
 			],
 			"editor/title": [
 				{
 					"command": "pr.openPullRequestOnGitHub",
 					"group": "navigation",
-					"when": "(activeWebviewPanelId == 'PullRequestOverview') && !isSessionsWindow"
+					"when": "config.azureDevOps.provider == github && ((activeWebviewPanelId == 'PullRequestOverview') && !isSessionsWindow)"
 				},
 				{
 					"command": "review.openFile",
 					"group": "navigation",
-					"when": "(resourceScheme =~ /^review$/ && isInDiffEditor) && !isSessionsWindow"
+					"when": "config.azureDevOps.provider == github && ((resourceScheme =~ /^review$/ && isInDiffEditor) && !isSessionsWindow)"
 				},
 				{
 					"command": "review.openLocalFile",
 					"group": "navigation",
-					"when": "(resourceScheme =~ /^review$/ && !isInDiffEditor) && !isSessionsWindow"
+					"when": "config.azureDevOps.provider == github && ((resourceScheme =~ /^review$/ && !isInDiffEditor) && !isSessionsWindow)"
 				},
 				{
 					"command": "issue.createIssueFromFile",
 					"group": "navigation",
-					"when": "(resourceFilename == NewIssue.md) && !isSessionsWindow"
+					"when": "config.azureDevOps.provider == github && ((resourceFilename == NewIssue.md) && !isSessionsWindow)"
 				},
 				{
 					"command": "pr.markFileAsViewed",
 					"group": "navigation",
-					"when": "(resourceScheme != pr && resourceScheme != review && resourceScheme != filechange && resourcePath in github:unviewedFiles) && !isSessionsWindow"
+					"when": "config.azureDevOps.provider == github && ((resourceScheme != pr && resourceScheme != review && resourceScheme != filechange && resourcePath in github:unviewedFiles) && !isSessionsWindow)"
 				},
 				{
 					"command": "pr.unmarkFileAsViewed",
 					"group": "navigation",
-					"when": "(resourceScheme != pr && resourceScheme != review && resourceScheme != filechange && resourcePath in github:viewedFiles) && !isSessionsWindow"
+					"when": "config.azureDevOps.provider == github && ((resourceScheme != pr && resourceScheme != review && resourceScheme != filechange && resourcePath in github:viewedFiles) && !isSessionsWindow)"
 				},
 				{
 					"command": "pr.openDiffViewFromEditor",
 					"group": "navigation",
-					"when": "(!isInDiffEditor && resourceScheme != pr && resourceScheme != review && resourceScheme != filechange && resourcePath in github:unviewedFiles) && !isSessionsWindow"
+					"when": "config.azureDevOps.provider == github && ((!isInDiffEditor && resourceScheme != pr && resourceScheme != review && resourceScheme != filechange && resourcePath in github:unviewedFiles) && !isSessionsWindow)"
 				},
 				{
 					"command": "pr.openDiffViewFromEditor",
 					"group": "navigation",
-					"when": "(!isInDiffEditor && resourceScheme != pr && resourceScheme != review && resourceScheme != filechange && resourcePath in github:viewedFiles) && !isSessionsWindow"
+					"when": "config.azureDevOps.provider == github && ((!isInDiffEditor && resourceScheme != pr && resourceScheme != review && resourceScheme != filechange && resourcePath in github:viewedFiles) && !isSessionsWindow)"
 				},
 				{
 					"command": "pr.addFileComment",
 					"group": "navigation",
-					"when": "(resourceScheme == pr) || (resourcePath in github:viewedFiles) || (resourcePath in github:unviewedFiles)"
+					"when": "config.azureDevOps.provider == github && ((resourceScheme == pr) || (resourcePath in github:viewedFiles) || (resourcePath in github:unviewedFiles))"
 				}
 			],
 			"editor/content": [
 				{
 					"command": "pr.acceptMerge",
-					"when": "(isMergeResultEditor && mergeEditorBaseUri =~ /^(githubpr|gitpr):/) && !isSessionsWindow"
+					"when": "config.azureDevOps.provider == github && ((isMergeResultEditor && mergeEditorBaseUri =~ /^(githubpr|gitpr):/) && !isSessionsWindow)"
 				}
 			],
 			"scm/title": [
 				{
 					"command": "pr.create",
-					"when": "(scmProvider =~ /^git|^remoteHub:github/ && scmProviderRootUri in github:reposNotInReviewMode) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((scmProvider =~ /^git|^remoteHub:github/ && scmProviderRootUri in github:reposNotInReviewMode) && !isSessionsWindow)",
 					"group": "navigation"
 				}
 			],
 			"scm/resourceGroup/context": [
 				{
 					"command": "review.createSuggestionsFromChanges",
-					"when": "(scmProviderRootUri in github:reposInReviewMode && scmProvider =~ /^git|^remoteHub:github/ && scmResourceGroup == workingTree) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((scmProviderRootUri in github:reposInReviewMode && scmProvider =~ /^git|^remoteHub:github/ && scmResourceGroup == workingTree) && !isSessionsWindow)",
 					"group": "inline@-2"
 				}
 			],
 			"scm/resourceState/context": [
 				{
 					"command": "review.createSuggestionsFromChanges",
-					"when": "(scmProviderRootUri in github:reposInReviewMode && scmProvider =~ /^git|^remoteHub:github/ && scmResourceGroup == workingTree) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((scmProviderRootUri in github:reposInReviewMode && scmProvider =~ /^git|^remoteHub:github/ && scmResourceGroup == workingTree) && !isSessionsWindow)",
 					"group": "1_modification@5"
 				}
 			],
 			"scm/repository": [
 				{
 					"command": "pr.create",
-					"when": "(scmProvider =~ /^git|^remoteHub:github/ && scmProviderRootUri in github:reposNotInReviewMode) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((scmProvider =~ /^git|^remoteHub:github/ && scmProviderRootUri in github:reposNotInReviewMode) && !isSessionsWindow)",
 					"group": "inline"
 				}
 			],
 			"comments/commentThread/context": [
 				{
+					"command": "azureDevOps.startReview",
+					"when": "commentController == azureDevOps",
+					"group": "inline@2"
+				},
+				{
+					"command": "azureDevOps.reply",
+					"when": "commentController == azureDevOps",
+					"group": "inline@1"
+				},
+				{
 					"command": "pr.createComment",
 					"group": "inline@1",
-					"when": "(commentController =~ /^github-browse/ && prInDraft) || (commentController =~ /^github-review/ && reviewInDraftMode)"
+					"when": "config.azureDevOps.provider == github && ((commentController =~ /^github-browse/ && prInDraft) || (commentController =~ /^github-review/ && reviewInDraftMode))"
 				},
 				{
 					"command": "pr.createSingleComment",
 					"group": "inline@1",
-					"when": "config.githubPullRequests.defaultCommentType != review && ((commentController =~ /^github-browse/ && !prInDraft) || (commentController =~ /^github-review/ && !reviewInDraftMode))"
+					"when": "config.azureDevOps.provider == github && (config.githubPullRequests.defaultCommentType != review && ((commentController =~ /^github-browse/ && !prInDraft) || (commentController =~ /^github-review/ && !reviewInDraftMode)))"
 				},
 				{
 					"command": "pr.startReview",
 					"group": "inline@1",
-					"when": "config.githubPullRequests.defaultCommentType == review && ((commentController =~ /^github-browse/ && !prInDraft) || (commentController =~ /^github-review/ && !reviewInDraftMode))"
+					"when": "config.azureDevOps.provider == github && (config.githubPullRequests.defaultCommentType == review && ((commentController =~ /^github-browse/ && !prInDraft) || (commentController =~ /^github-review/ && !reviewInDraftMode)))"
 				},
 				{
 					"command": "pr.startReview",
 					"group": "inline@2",
-					"when": "config.githubPullRequests.defaultCommentType != review && ((commentController =~ /^github-browse/ && !prInDraft) || (commentController =~ /^github-review/ && !reviewInDraftMode))"
+					"when": "config.azureDevOps.provider == github && (config.githubPullRequests.defaultCommentType != review && ((commentController =~ /^github-browse/ && !prInDraft) || (commentController =~ /^github-review/ && !reviewInDraftMode)))"
 				},
 				{
 					"command": "pr.createSingleComment",
 					"group": "inline@2",
-					"when": "config.githubPullRequests.defaultCommentType == review && ((commentController =~ /^github-browse/ && !prInDraft) || commentController =~ /^github-review/ && !reviewInDraftMode)"
+					"when": "config.azureDevOps.provider == github && (config.githubPullRequests.defaultCommentType == review && ((commentController =~ /^github-browse/ && !prInDraft) || commentController =~ /^github-review/ && !reviewInDraftMode))"
 				}
 			],
 			"comments/comment/editorActions": [
 				{
 					"command": "pr.makeSuggestion",
 					"group": "inline@3",
-					"when": "commentController =~ /^github-(browse|review)/ && !github:activeCommentHasSuggestion"
+					"when": "config.azureDevOps.provider == github && (commentController =~ /^github-(browse|review)/ && !github:activeCommentHasSuggestion)"
 				},
 				{
 					"command": "pr.uploadFile",
 					"group": "inline@4",
-					"when": "commentController =~ /^github-(browse|review)/"
+					"when": "config.azureDevOps.provider == github && (commentController =~ /^github-(browse|review)/)"
 				}
 			],
 			"comments/commentThread/additionalActions": [
 				{
+					"command": "azureDevOps.resolveThread",
+					"when": "commentController == azureDevOps && commentThread == azureActive",
+					"group": "inline@1"
+				},
+				{
+					"command": "azureDevOps.reopenThread",
+					"when": "commentController == azureDevOps && commentThread == azureResolved",
+					"group": "inline@1"
+				},
+				{
 					"command": "pr.resolveReviewThread",
 					"group": "inline@1",
-					"when": "commentController =~ /^github-(browse|review)/ && commentThread =~ /canResolve/"
+					"when": "config.azureDevOps.provider == github && (commentController =~ /^github-(browse|review)/ && commentThread =~ /canResolve/)"
 				},
 				{
 					"command": "pr.unresolveReviewThread",
 					"group": "inline@1",
-					"when": "commentController =~ /^github-(browse|review)/ && commentThread =~ /canUnresolve/"
+					"when": "config.azureDevOps.provider == github && (commentController =~ /^github-(browse|review)/ && commentThread =~ /canUnresolve/)"
 				},
 				{
 					"command": "pr.openReview",
 					"group": "inline@2",
-					"when": "(commentController =~ /^github-browse/ && prInDraft) || (commentController =~ /^github-review/ && reviewInDraftMode)"
+					"when": "config.azureDevOps.provider == github && ((commentController =~ /^github-browse/ && prInDraft) || (commentController =~ /^github-review/ && reviewInDraftMode))"
 				}
 			],
 			"comments/commentThread/title/context": [
 				{
 					"command": "pr.resolveReviewThread",
 					"group": "inline@3",
-					"when": "commentController =~ /^github-(browse|review)/ && commentThread =~ /canResolve/"
+					"when": "config.azureDevOps.provider == github && (commentController =~ /^github-(browse|review)/ && commentThread =~ /canResolve/)"
 				},
 				{
 					"command": "pr.unresolveReviewThread",
 					"group": "inline@3",
-					"when": "commentController =~ /^github-(browse|review)/ && commentThread =~ /canUnresolve/"
+					"when": "config.azureDevOps.provider == github && (commentController =~ /^github-(browse|review)/ && commentThread =~ /canUnresolve/)"
 				}
 			],
 			"comments/commentThread/comment/context": [
 				{
 					"command": "pr.resolveReviewThread",
-					"when": "commentController =~ /^github-(browse|review)/ && commentThread =~ /canResolve/"
+					"when": "config.azureDevOps.provider == github && (commentController =~ /^github-(browse|review)/ && commentThread =~ /canResolve/)"
 				},
 				{
 					"command": "pr.unresolveReviewThread",
-					"when": "commentController =~ /^github-(browse|review)/ && commentThread =~ /canUnresolve/"
+					"when": "config.azureDevOps.provider == github && (commentController =~ /^github-(browse|review)/ && commentThread =~ /canUnresolve/)"
 				},
 				{
 					"command": "pr.applySuggestion",
-					"when": "commentController =~ /^github-review/ && comment =~ /hasSuggestion/"
+					"when": "config.azureDevOps.provider == github && (commentController =~ /^github-review/ && comment =~ /hasSuggestion/)"
 				},
 				{
 					"command": "pr.applySuggestionWithCopilot",
-					"when": "commentController =~ /^github-review/ && !config.chat.disableAIFeatures"
+					"when": "config.azureDevOps.provider == github && (commentController =~ /^github-review/ && !config.chat.disableAIFeatures)"
 				}
 			],
 			"comments/comment/title": [
 				{
+					"command": "azureDevOps.applySuggestion",
+					"when": "commentController == azureDevOps && comment == azureSuggestion",
+					"group": "inline@0"
+				},
+				{
+					"command": "azureDevOps.editComment",
+					"when": "commentController == azureDevOps && comment =~ /^azure(Comment|Draft|Suggestion)$/",
+					"group": "overflow@1"
+				},
+				{
+					"command": "azureDevOps.deleteComment",
+					"when": "commentController == azureDevOps && comment =~ /^azure(Comment|Draft|Suggestion)$/",
+					"group": "overflow@2"
+				},
+				{
 					"command": "pr.applySuggestion",
 					"group": "inline@0",
-					"when": "commentController =~ /^github-review/ && comment =~ /hasSuggestion/"
+					"when": "config.azureDevOps.provider == github && (commentController =~ /^github-review/ && comment =~ /hasSuggestion/)"
 				},
 				{
 					"command": "pr.applySuggestionWithCopilot",
 					"group": "overflow@0",
-					"when": "commentController =~ /^github-review/ && !config.chat.disableAIFeatures"
+					"when": "config.azureDevOps.provider == github && (commentController =~ /^github-review/ && !config.chat.disableAIFeatures)"
 				},
 				{
 					"command": "pr.editComment",
 					"group": "overflow@1",
-					"when": "commentController =~ /^github-(browse|review)/ && comment =~ /canEdit/"
+					"when": "config.azureDevOps.provider == github && (commentController =~ /^github-(browse|review)/ && comment =~ /canEdit/)"
 				},
 				{
 					"command": "pr.deleteComment",
 					"group": "overflow@2",
-					"when": "commentController =~ /^github-(browse|review)/ && comment =~ /canDelete/"
+					"when": "config.azureDevOps.provider == github && (commentController =~ /^github-(browse|review)/ && comment =~ /canDelete/)"
 				},
 				{
 					"command": "pr.copyCommentLink",
 					"group": "overflow@3",
-					"when": "commentController =~ /^github-(browse|review)/ && comment =~ /canEdit/"
+					"when": "config.azureDevOps.provider == github && (commentController =~ /^github-(browse|review)/ && comment =~ /canEdit/)"
 				}
 			],
 			"comments/commentThread/title": [
 				{
+					"command": "azureDevOps.submitReview",
+					"when": "commentController == azureDevOps",
+					"group": "review@1"
+				},
+				{
 					"command": "pr.refreshComments",
 					"group": "0_refresh@0",
-					"when": "commentController =~ /^github-(browse|review)/"
+					"when": "config.azureDevOps.provider == github && (commentController =~ /^github-(browse|review)/)"
 				},
 				{
 					"command": "pr.collapseAllComments",
 					"group": "1_collapse@0",
-					"when": "commentController =~ /^github-(browse|review)/"
+					"when": "config.azureDevOps.provider == github && (commentController =~ /^github-(browse|review)/)"
 				}
 			],
 			"comments/comment/context": [
 				{
 					"command": "pr.saveComment",
 					"group": "inline@1",
-					"when": "commentController =~ /^github-(browse|review)/"
+					"when": "config.azureDevOps.provider == github && (commentController =~ /^github-(browse|review)/)"
 				},
 				{
 					"command": "pr.cancelEditComment",
 					"group": "inline@2",
-					"when": "commentController =~ /^github-(browse|review)/"
+					"when": "config.azureDevOps.provider == github && (commentController =~ /^github-(browse|review)/)"
 				}
 			],
 			"editor/context/copy": [
 				{
 					"command": "issue.copyGithubPermalink",
-					"when": "(github:hasGitHubRemotes) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((github:hasGitHubRemotes) && !isSessionsWindow)",
 					"group": "3_githubPullRequests@0"
 				},
 				{
 					"command": "issue.copyMarkdownGithubPermalink",
-					"when": "(github:hasGitHubRemotes) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((github:hasGitHubRemotes) && !isSessionsWindow)",
 					"group": "3_githubPullRequests@1"
 				},
 				{
 					"command": "issue.copyGithubHeadLink",
-					"when": "(github:hasGitHubRemotes) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((github:hasGitHubRemotes) && !isSessionsWindow)",
 					"group": "3_githubPullRequests@2"
 				}
 			],
 			"editor/context/share": [
 				{
 					"command": "issue.copyGithubPermalink",
-					"when": "(github:hasGitHubRemotes) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((github:hasGitHubRemotes) && !isSessionsWindow)",
 					"group": "1_githubPullRequests@0"
 				},
 				{
 					"command": "issue.copyMarkdownGithubPermalink",
-					"when": "(github:hasGitHubRemotes) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((github:hasGitHubRemotes) && !isSessionsWindow)",
 					"group": "1_githubPullRequests@1"
 				},
 				{
 					"command": "issue.copyGithubHeadLink",
-					"when": "(github:hasGitHubRemotes) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((github:hasGitHubRemotes) && !isSessionsWindow)",
 					"group": "1_githubPullRequests@2"
 				},
 				{
 					"command": "issue.copyGithubDevLink",
-					"when": "(github:hasGitHubRemotes && remoteName == codespaces && isWeb || github:hasGitHubRemotes && embedderIdentifier == github.dev) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((github:hasGitHubRemotes && remoteName == codespaces && isWeb || github:hasGitHubRemotes && embedderIdentifier == github.dev) && !isSessionsWindow)",
 					"group": "0_vscode@0"
 				}
 			],
 			"editor/context": [
 				{
 					"command": "review.createSuggestionFromChange",
-					"when": "(activeEditor == workbench.editors.textDiffEditor && (resourcePath in github:unviewedFiles || resourcePath in github:viewedFiles)) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((activeEditor == workbench.editors.textDiffEditor && (resourcePath in github:unviewedFiles || resourcePath in github:viewedFiles)) && !isSessionsWindow)",
 					"group": "2_git@6"
 				}
 			],
 			"file/share": [
 				{
 					"command": "issue.copyGithubPermalink",
-					"when": "(github:hasGitHubRemotes) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((github:hasGitHubRemotes) && !isSessionsWindow)",
 					"group": "1_githubPullRequests@0"
 				},
 				{
 					"command": "pr.copyVscodeDevPrLink",
-					"when": "(github:hasGitHubRemotes && github:inReviewMode && remoteName != codespaces && embedderIdentifier != github.dev) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((github:hasGitHubRemotes && github:inReviewMode && remoteName != codespaces && embedderIdentifier != github.dev) && !isSessionsWindow)",
 					"group": "1_githubPullRequests@1"
 				},
 				{
 					"command": "issue.copyMarkdownGithubPermalink",
-					"when": "(github:hasGitHubRemotes) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((github:hasGitHubRemotes) && !isSessionsWindow)",
 					"group": "1_githubPullRequests@2"
 				},
 				{
 					"command": "issue.copyGithubHeadLink",
-					"when": "(github:hasGitHubRemotes) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((github:hasGitHubRemotes) && !isSessionsWindow)",
 					"group": "1_githubPullRequests@3"
 				},
 				{
 					"command": "issue.copyGithubDevLinkFile",
-					"when": "(github:hasGitHubRemotes && remoteName == codespaces && isWeb || github:hasGitHubRemotes && embedderIdentifier == github.dev) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((github:hasGitHubRemotes && remoteName == codespaces && isWeb || github:hasGitHubRemotes && embedderIdentifier == github.dev) && !isSessionsWindow)",
 					"group": "0_vscode@0"
 				}
 			],
 			"editor/lineNumber/context": [
 				{
 					"command": "issue.copyGithubPermalink",
-					"when": "(github:hasGitHubRemotes && activeEditor == workbench.editors.files.textFileEditor && config.editor.lineNumbers == on) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((github:hasGitHubRemotes && activeEditor == workbench.editors.files.textFileEditor && config.editor.lineNumbers == on) && !isSessionsWindow)",
 					"group": "1_cutcopypaste@3"
 				},
 				{
 					"command": "issue.copyMarkdownGithubPermalink",
-					"when": "(github:hasGitHubRemotes && activeEditor == workbench.editors.files.textFileEditor && config.editor.lineNumbers == on) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((github:hasGitHubRemotes && activeEditor == workbench.editors.files.textFileEditor && config.editor.lineNumbers == on) && !isSessionsWindow)",
 					"group": "1_cutcopypaste@4"
 				},
 				{
 					"command": "issue.copyGithubHeadLink",
-					"when": "(github:hasGitHubRemotes && activeEditor == workbench.editors.files.textFileEditor && config.editor.lineNumbers == on) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((github:hasGitHubRemotes && activeEditor == workbench.editors.files.textFileEditor && config.editor.lineNumbers == on) && !isSessionsWindow)",
 					"group": "1_cutcopypaste@5"
 				},
 				{
 					"command": "issue.copyGithubDevLink",
-					"when": "(github:hasGitHubRemotes && remoteName == codespaces && isWeb || github:hasGitHubRemotes && embedderIdentifier == github.dev) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((github:hasGitHubRemotes && remoteName == codespaces && isWeb || github:hasGitHubRemotes && embedderIdentifier == github.dev) && !isSessionsWindow)",
 					"group": "1_cutcopypaste@0"
 				}
 			],
 			"editor/title/context": [
 				{
 					"command": "pr.closeRelatedEditors",
-					"when": "(resourceScheme == 'pr' || resourceScheme == 'review' || resourcePath in github:unviewedFiles || resourcePath in github:viewedFiles) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((resourceScheme == 'pr' || resourceScheme == 'review' || resourcePath in github:unviewedFiles || resourcePath in github:viewedFiles) && !isSessionsWindow)",
 					"group": "1_close@60"
 				}
 			],
 			"editor/title/context/share": [
 				{
 					"command": "issue.copyGithubPermalinkWithoutRange",
-					"when": "(github:hasGitHubRemotes) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((github:hasGitHubRemotes) && !isSessionsWindow)",
 					"group": "1_githubPullRequests@10"
 				},
 				{
 					"command": "issue.copyMarkdownGithubPermalinkWithoutRange",
-					"when": "(github:hasGitHubRemotes) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((github:hasGitHubRemotes) && !isSessionsWindow)",
 					"group": "1_githubPullRequests@11"
 				},
 				{
 					"command": "issue.copyGithubHeadLinkWithoutRange",
-					"when": "(github:hasGitHubRemotes) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((github:hasGitHubRemotes) && !isSessionsWindow)",
 					"group": "1_githubPullRequests@12"
 				},
 				{
 					"command": "issue.copyGithubDevLinkWithoutRange",
-					"when": "(github:hasGitHubRemotes && remoteName == codespaces && isWeb || github:hasGitHubRemotes && embedderIdentifier == github.dev) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((github:hasGitHubRemotes && remoteName == codespaces && isWeb || github:hasGitHubRemotes && embedderIdentifier == github.dev) && !isSessionsWindow)",
 					"group": "0_vscode@0"
 				}
 			],
 			"explorer/context/share": [
 				{
 					"command": "issue.copyGithubPermalinkWithoutRange",
-					"when": "(github:hasGitHubRemotes) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((github:hasGitHubRemotes) && !isSessionsWindow)",
 					"group": "5_githubPulLRequests@10"
 				},
 				{
 					"command": "issue.copyMarkdownGithubPermalinkWithoutRange",
-					"when": "(github:hasGitHubRemotes) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((github:hasGitHubRemotes) && !isSessionsWindow)",
 					"group": "5_githubPulLRequests@11"
 				},
 				{
 					"command": "issue.copyGithubHeadLinkWithoutRange",
-					"when": "(github:hasGitHubRemotes) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((github:hasGitHubRemotes) && !isSessionsWindow)",
 					"group": "5_githubPulLRequests@12"
 				},
 				{
 					"command": "issue.copyGithubDevLinkWithoutRange",
-					"when": "(github:hasGitHubRemotes && remoteName == codespaces && isWeb || github:hasGitHubRemotes && embedderIdentifier == github.dev) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((github:hasGitHubRemotes && remoteName == codespaces && isWeb || github:hasGitHubRemotes && embedderIdentifier == github.dev) && !isSessionsWindow)",
 					"group": "0_vscode@0"
 				}
 			],
 			"menuBar/edit/copy": [
 				{
 					"command": "issue.copyGithubPermalink",
-					"when": "(github:hasGitHubRemotes) && !isSessionsWindow"
+					"when": "config.azureDevOps.provider == github && ((github:hasGitHubRemotes) && !isSessionsWindow)"
 				},
 				{
 					"command": "issue.copyMarkdownGithubPermalink",
-					"when": "(github:hasGitHubRemotes) && !isSessionsWindow"
+					"when": "config.azureDevOps.provider == github && ((github:hasGitHubRemotes) && !isSessionsWindow)"
 				}
 			],
 			"remoteHub/pullRequest": [
 				{
 					"command": "pr.create",
-					"when": "(scmProvider =~ /^remoteHub:github/) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((scmProvider =~ /^remoteHub:github/) && !isSessionsWindow)",
 					"group": "1_modification@0"
 				}
 			],
 			"webview/context": [
 				{
 					"command": "pr.createPrMenuCreate",
-					"when": "(webviewId == 'github:createPullRequestWebview' && github:createPrMenu) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((webviewId == 'github:createPullRequestWebview' && github:createPrMenu) && !isSessionsWindow)",
 					"group": "0_create@0"
 				},
 				{
 					"command": "pr.createPrMenuDraft",
-					"when": "(webviewId == 'github:createPullRequestWebview' && github:createPrMenu && github:createPrMenuDraft) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((webviewId == 'github:createPullRequestWebview' && github:createPrMenu && github:createPrMenuDraft) && !isSessionsWindow)",
 					"group": "0_create@1"
 				},
 				{
 					"command": "pr.createPrMenuMergeWhenReady",
-					"when": "(webviewId == 'github:createPullRequestWebview' && github:createPrMenu && github:createPrMenuMergeWhenReady) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((webviewId == 'github:createPullRequestWebview' && github:createPrMenu && github:createPrMenuMergeWhenReady) && !isSessionsWindow)",
 					"group": "1_create@0"
 				},
 				{
 					"command": "pr.createPrMenuMerge",
-					"when": "(webviewId == 'github:createPullRequestWebview' && github:createPrMenu && github:createPrMenuMerge) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((webviewId == 'github:createPullRequestWebview' && github:createPrMenu && github:createPrMenuMerge) && !isSessionsWindow)",
 					"group": "1_create@0"
 				},
 				{
 					"command": "pr.createPrMenuSquash",
-					"when": "(webviewId == 'github:createPullRequestWebview' && github:createPrMenu && github:createPrMenuSquash) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((webviewId == 'github:createPullRequestWebview' && github:createPrMenu && github:createPrMenuSquash) && !isSessionsWindow)",
 					"group": "1_create@1"
 				},
 				{
 					"command": "pr.createPrMenuRebase",
-					"when": "(webviewId == 'github:createPullRequestWebview' && github:createPrMenu && github:createPrMenuRebase) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((webviewId == 'github:createPullRequestWebview' && github:createPrMenu && github:createPrMenuRebase) && !isSessionsWindow)",
 					"group": "1_create@2"
 				},
 				{
 					"command": "review.comment",
-					"when": "(webviewId == 'github:activePullRequest' && github:reviewCommentMenu && github:reviewCommentComment) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((webviewId == 'github:activePullRequest' && github:reviewCommentMenu && github:reviewCommentComment) && !isSessionsWindow)",
 					"group": "1_review@1"
 				},
 				{
 					"command": "review.approve",
-					"when": "(webviewId == 'github:activePullRequest' && github:reviewCommentMenu && github:reviewCommentApprove) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((webviewId == 'github:activePullRequest' && github:reviewCommentMenu && github:reviewCommentApprove) && !isSessionsWindow)",
 					"group": "1_review@2"
 				},
 				{
 					"command": "review.requestChanges",
-					"when": "(webviewId == 'github:activePullRequest' && github:reviewCommentMenu && github:reviewCommentRequestChanges) && !isSessionsWindow",
+					"when": "config.azureDevOps.provider == github && ((webviewId == 'github:activePullRequest' && github:reviewCommentMenu && github:reviewCommentRequestChanges) && !isSessionsWindow)",
 					"group": "1_review@3"
 				},
 				{
 					"command": "review.approveOnDotCom",
-					"when": "(webviewId == 'github:activePullRequest' && github:reviewCommentMenu && github:reviewCommentApproveOnDotCom) && !isSessionsWindow"
+					"when": "config.azureDevOps.provider == github && ((webviewId == 'github:activePullRequest' && github:reviewCommentMenu && github:reviewCommentApproveOnDotCom) && !isSessionsWindow)"
 				},
 				{
 					"command": "review.requestChangesOnDotCom",
-					"when": "(webviewId == 'github:activePullRequest' && github:reviewCommentMenu && github:reviewCommentRequestChangesOnDotCom) && !isSessionsWindow"
+					"when": "config.azureDevOps.provider == github && ((webviewId == 'github:activePullRequest' && github:reviewCommentMenu && github:reviewCommentRequestChangesOnDotCom) && !isSessionsWindow)"
 				},
 				{
 					"command": "review.commentDescription",
-					"when": "webviewId == PullRequestOverview && github:reviewCommentMenu && github:reviewCommentComment",
+					"when": "config.azureDevOps.provider == github && (webviewId == PullRequestOverview && github:reviewCommentMenu && github:reviewCommentComment)",
 					"group": "1_review@1"
 				},
 				{
 					"command": "review.approveDescription",
-					"when": "webviewId == PullRequestOverview && github:reviewCommentMenu && github:reviewCommentApprove",
+					"when": "config.azureDevOps.provider == github && (webviewId == PullRequestOverview && github:reviewCommentMenu && github:reviewCommentApprove)",
 					"group": "1_review@2"
 				},
 				{
 					"command": "review.requestChangesDescription",
-					"when": "webviewId == PullRequestOverview && github:reviewCommentMenu && github:reviewCommentRequestChanges",
+					"when": "config.azureDevOps.provider == github && (webviewId == PullRequestOverview && github:reviewCommentMenu && github:reviewCommentRequestChanges)",
 					"group": "1_review@3"
 				},
 				{
 					"command": "review.approveOnDotComDescription",
-					"when": "webviewId == PullRequestOverview && github:reviewCommentMenu && github:reviewCommentApproveOnDotCom"
+					"when": "config.azureDevOps.provider == github && (webviewId == PullRequestOverview && github:reviewCommentMenu && github:reviewCommentApproveOnDotCom)"
 				},
 				{
 					"command": "review.requestChangesOnDotComDescription",
-					"when": "webviewId == PullRequestOverview && github:reviewCommentMenu && github:reviewCommentRequestChangesOnDotCom"
+					"when": "config.azureDevOps.provider == github && (webviewId == PullRequestOverview && github:reviewCommentMenu && github:reviewCommentRequestChangesOnDotCom)"
 				},
 				{
 					"command": "pr.copyPrLink",
-					"when": "(webviewId == PullRequestOverview || (webviewId == IssueOverview && !isSessionsWindow)) && github:copyMenu"
+					"when": "config.azureDevOps.provider == github && ((webviewId == PullRequestOverview || (webviewId == IssueOverview && !isSessionsWindow)) && github:copyMenu)"
 				},
 				{
 					"command": "pr.copyVscodeDevPrLink",
-					"when": "webviewId == PullRequestOverview && github:copyMenu"
+					"when": "config.azureDevOps.provider == github && (webviewId == PullRequestOverview && github:copyMenu)"
 				},
 				{
 					"command": "pr.readyForReviewDescription",
-					"when": "(webviewId == PullRequestOverview) && github:readyForReviewMenu"
+					"when": "config.azureDevOps.provider == github && ((webviewId == PullRequestOverview) && github:readyForReviewMenu)"
 				},
 				{
 					"command": "pr.readyForReviewAndMergeDescription",
-					"when": "(webviewId == PullRequestOverview) && github:readyForReviewMenu && github:readyForReviewMenuWithMerge"
+					"when": "config.azureDevOps.provider == github && ((webviewId == PullRequestOverview) && github:readyForReviewMenu && github:readyForReviewMenuWithMerge)"
 				},
 				{
 					"command": "pr.readyForReview",
-					"when": "((webviewId == 'github:activePullRequest') && github:readyForReviewMenu) && !isSessionsWindow"
+					"when": "config.azureDevOps.provider == github && (((webviewId == 'github:activePullRequest') && github:readyForReviewMenu) && !isSessionsWindow)"
 				},
 				{
 					"command": "pr.readyForReviewAndMerge",
-					"when": "((webviewId == 'github:activePullRequest') && github:readyForReviewMenu && github:readyForReviewMenuWithMerge) && !isSessionsWindow"
+					"when": "config.azureDevOps.provider == github && (((webviewId == 'github:activePullRequest') && github:readyForReviewMenu && github:readyForReviewMenuWithMerge) && !isSessionsWindow)"
 				},
 				{
 					"command": "pr.openChanges",
 					"group": "checkout@0",
-					"when": "(webviewId == PullRequestOverview && github:checkoutMenu) && !isSessionsWindow"
+					"when": "config.azureDevOps.provider == github && ((webviewId == PullRequestOverview && github:checkoutMenu) && !isSessionsWindow)"
 				},
 				{
 					"command": "pr.pickInWorktreeFromDescription",
 					"group": "checkout@1",
-					"when": "(webviewId == PullRequestOverview && github:checkoutMenu && !isWeb) && !isSessionsWindow"
+					"when": "config.azureDevOps.provider == github && ((webviewId == PullRequestOverview && github:checkoutMenu && !isWeb) && !isSessionsWindow)"
 				},
 				{
 					"command": "pr.checkoutOnVscodeDevFromDescription",
 					"group": "checkout@2",
-					"when": "(webviewId == PullRequestOverview && github:checkoutMenu) && !isSessionsWindow"
+					"when": "config.azureDevOps.provider == github && ((webviewId == PullRequestOverview && github:checkoutMenu) && !isSessionsWindow)"
 				},
 				{
 					"command": "pr.checkoutOnCodespacesFromDescription",
 					"group": "checkout@3",
-					"when": "(webviewId == PullRequestOverview && github:checkoutMenu) && !isSessionsWindow"
+					"when": "config.azureDevOps.provider == github && ((webviewId == PullRequestOverview && github:checkoutMenu) && !isSessionsWindow)"
 				},
 				{
 					"command": "pr.openSessionLogFromDescription",
-					"when": "webviewId == PullRequestOverview && github:codingAgentMenu"
+					"when": "config.azureDevOps.provider == github && (webviewId == PullRequestOverview && github:codingAgentMenu)"
 				}
 			],
 			"chat/chatSessions": [
 				{
 					"command": "pr.openChanges",
-					"when": "chatSessionType == copilot-cloud-agent && !config.chat.disableAIFeatures",
+					"when": "config.azureDevOps.provider == github && (chatSessionType == copilot-cloud-agent && !config.chat.disableAIFeatures)",
 					"group": "inline"
 				},
 				{
 					"command": "pr.checkoutChatSessionPullRequest",
-					"when": "chatSessionType == copilot-cloud-agent && !config.chat.disableAIFeatures",
+					"when": "config.azureDevOps.provider == github && (chatSessionType == copilot-cloud-agent && !config.chat.disableAIFeatures)",
 					"group": "context"
 				}
 			],
@@ -3835,12 +4401,12 @@
 				{
 					"command": "pr.checkoutFromChat",
 					"group": "navigation@0",
-					"when": "chatSessionType == copilot-cloud-agent && workspaceFolderCount > 0 && github.vscode-pull-request-github.activated && !config.chat.disableAIFeatures"
+					"when": "config.azureDevOps.provider == github && (chatSessionType == copilot-cloud-agent && workspaceFolderCount > 0 && github.vscode-pull-request-github.activated && !config.chat.disableAIFeatures)"
 				},
 				{
 					"command": "pr.applyChangesFromChat",
 					"group": "navigation@1",
-					"when": "chatSessionType == copilot-cloud-agent && workspaceFolderCount > 0 && github.vscode-pull-request-github.activated && !config.chat.disableAIFeatures"
+					"when": "config.azureDevOps.provider == github && (chatSessionType == copilot-cloud-agent && workspaceFolderCount > 0 && github.vscode-pull-request-github.activated && !config.chat.disableAIFeatures)"
 				}
 			]
 		},
@@ -4011,7 +4577,7 @@
 						"issueNumber"
 					]
 				},
-				"when": "config.githubPullRequests.experimental.chat"
+				"when": "config.azureDevOps.provider == github && (config.githubPullRequests.experimental.chat)"
 			},
 			{
 				"name": "github-pull-request_labels_fetch",
@@ -4048,7 +4614,7 @@
 						}
 					}
 				},
-				"when": "config.githubPullRequests.experimental.chat"
+				"when": "config.azureDevOps.provider == github && (config.githubPullRequests.experimental.chat)"
 			},
 			{
 				"name": "github-pull-request_notification_fetch",
@@ -4074,7 +4640,7 @@
 						"thread_id"
 					]
 				},
-				"when": "config.githubPullRequests.experimental.chat"
+				"when": "config.azureDevOps.provider == github && (config.githubPullRequests.experimental.chat)"
 			},
 			{
 				"name": "github-pull-request_doSearch",
@@ -4120,7 +4686,7 @@
 						"repo"
 					]
 				},
-				"when": "config.githubPullRequests.experimental.chat"
+				"when": "config.azureDevOps.provider == github && (config.githubPullRequests.experimental.chat)"
 			},
 			{
 				"name": "github-pull-request_currentActivePullRequest",
@@ -4134,7 +4700,7 @@
 				"icon": "$(git-pull-request)",
 				"canBeReferencedInPrompt": true,
 				"userDescription": "%languageModelTools.github-pull-request_currentActivePullRequest.description%",
-				"when": "config.githubPullRequests.experimental.chat",
+				"when": "config.azureDevOps.provider == github && (config.githubPullRequests.experimental.chat)",
 				"inputSchema": {
 					"type": "object",
 					"properties": {
@@ -4189,7 +4755,7 @@
 					]
 				},
 				"userDescription": "%languageModelTools.github-pull-request_pullRequestStatusChecks.description%",
-				"when": "config.githubPullRequests.experimental.chat"
+				"when": "config.azureDevOps.provider == github && (config.githubPullRequests.experimental.chat)"
 			},
 			{
 				"name": "github-pull-request_pullRequestInViewport",
@@ -4203,7 +4769,7 @@
 				"icon": "$(git-pull-request)",
 				"canBeReferencedInPrompt": true,
 				"userDescription": "%languageModelTools.github-pull-request_pullRequestInViewport.description%",
-				"when": "config.githubPullRequests.experimental.chat"
+				"when": "config.azureDevOps.provider == github && (config.githubPullRequests.experimental.chat)"
 			},
 			{
 				"name": "github-pull-request_create_pull_request",
@@ -4264,7 +4830,7 @@
 						"head"
 					]
 				},
-				"when": "config.githubPullRequests.experimental.chat"
+				"when": "config.azureDevOps.provider == github && (config.githubPullRequests.experimental.chat)"
 			},
 			{
 				"name": "github-pull-request_resolveReviewThread",
@@ -4279,7 +4845,7 @@
 				"icon": "$(pass)",
 				"canBeReferencedInPrompt": true,
 				"userDescription": "%languageModelTools.github-pull-request_resolveReviewThread.description%",
-				"when": "config.githubPullRequests.experimental.chat",
+				"when": "config.azureDevOps.provider == github && (config.githubPullRequests.experimental.chat)",
 				"inputSchema": {
 					"type": "object",
 					"properties": {
@@ -4291,6 +4857,385 @@
 					"required": [
 						"threadId"
 					]
+				}
+			},
+			{
+				"name": "azure-devops_active_pull_request",
+				"displayName": "%azureDevOps.tools.active_pull_request.title%",
+				"userDescription": "%azureDevOps.tools.active_pull_request.description%",
+				"modelDescription": "Get active Azure DevOps pull requests for the checked-out branch. Only repositories discovered in the workspace are accepted; disambiguate with repository, project, and organizationUrl.",
+				"toolReferenceName": "azdo_active_pull_request",
+				"canBeReferencedInPrompt": true,
+				"tags": [
+					"azure-devops",
+					"pull-requests",
+					"work-items"
+				],
+				"when": "config.azureDevOps.provider == azureDevOps && !config.chat.disableAIFeatures",
+				"inputSchema": {
+					"type": "object",
+					"properties": {
+						"repository": {
+							"type": "string",
+							"description": "Discovered repository name."
+						},
+						"project": {
+							"type": "string"
+						},
+						"organizationUrl": {
+							"type": "string"
+						}
+					},
+					"required": [],
+					"additionalProperties": false
+				}
+			},
+			{
+				"name": "azure-devops_open_pull_request",
+				"displayName": "%azureDevOps.tools.open_pull_request.title%",
+				"userDescription": "%azureDevOps.tools.open_pull_request.description%",
+				"modelDescription": "Open an Azure DevOps pull request in the browser. Only repositories discovered in the workspace are accepted; disambiguate with repository, project, and organizationUrl.",
+				"toolReferenceName": "azdo_open_pull_request",
+				"canBeReferencedInPrompt": true,
+				"tags": [
+					"azure-devops",
+					"pull-requests",
+					"work-items"
+				],
+				"when": "config.azureDevOps.provider == azureDevOps && !config.chat.disableAIFeatures",
+				"inputSchema": {
+					"type": "object",
+					"properties": {
+						"repository": {
+							"type": "string",
+							"description": "Discovered repository name."
+						},
+						"project": {
+							"type": "string"
+						},
+						"organizationUrl": {
+							"type": "string"
+						},
+						"id": {
+							"type": "integer",
+							"minimum": 1
+						}
+					},
+					"required": [
+						"id"
+					],
+					"additionalProperties": false
+				}
+			},
+			{
+				"name": "azure-devops_pull_request_fetch",
+				"displayName": "%azureDevOps.tools.pull_request_fetch.title%",
+				"userDescription": "%azureDevOps.tools.pull_request_fetch.description%",
+				"modelDescription": "Get an Azure DevOps pull request, discussion threads, latest iteration, and changed files. Supply path from changes to read immutable base/source file contents. Only discovered workspace repositories are accepted; disambiguate with repository, project, and organizationUrl.",
+				"toolReferenceName": "azdo_pull_request_fetch",
+				"canBeReferencedInPrompt": true,
+				"tags": [
+					"azure-devops",
+					"pull-requests",
+					"work-items"
+				],
+				"when": "config.azureDevOps.provider == azureDevOps && !config.chat.disableAIFeatures",
+				"inputSchema": {
+					"type": "object",
+					"properties": {
+						"repository": {
+							"type": "string",
+							"description": "Discovered repository name."
+						},
+						"project": {
+							"type": "string"
+						},
+						"organizationUrl": {
+							"type": "string"
+						},
+						"id": {
+							"type": "integer",
+							"minimum": 1
+						},
+						"path": {
+							"type": "string",
+							"description": "Optional changed-file path to read immutable base and source content."
+						}
+					},
+					"required": [
+						"id"
+					],
+					"additionalProperties": false
+				}
+			},
+			{
+				"name": "azure-devops_pull_request_checks",
+				"displayName": "%azureDevOps.tools.pull_request_checks.title%",
+				"userDescription": "%azureDevOps.tools.pull_request_checks.description%",
+				"modelDescription": "Get Azure DevOps commit statuses and required branch policy evaluations. Only repositories discovered in the workspace are accepted; disambiguate with repository, project, and organizationUrl.",
+				"toolReferenceName": "azdo_pull_request_checks",
+				"canBeReferencedInPrompt": true,
+				"tags": [
+					"azure-devops",
+					"pull-requests",
+					"work-items"
+				],
+				"when": "config.azureDevOps.provider == azureDevOps && !config.chat.disableAIFeatures",
+				"inputSchema": {
+					"type": "object",
+					"properties": {
+						"repository": {
+							"type": "string",
+							"description": "Discovered repository name."
+						},
+						"project": {
+							"type": "string"
+						},
+						"organizationUrl": {
+							"type": "string"
+						},
+						"id": {
+							"type": "integer",
+							"minimum": 1
+						}
+					},
+					"required": [
+						"id"
+					],
+					"additionalProperties": false
+				}
+			},
+			{
+				"name": "azure-devops_create_pull_request",
+				"displayName": "%azureDevOps.tools.create_pull_request.title%",
+				"userDescription": "%azureDevOps.tools.create_pull_request.description%",
+				"modelDescription": "Create an Azure DevOps pull request from an already published source branch. Requires user confirmation. Only repositories discovered in the workspace are accepted; disambiguate with repository, project, and organizationUrl.",
+				"toolReferenceName": "azdo_create_pull_request",
+				"canBeReferencedInPrompt": true,
+				"tags": [
+					"azure-devops",
+					"pull-requests",
+					"work-items"
+				],
+				"when": "config.azureDevOps.provider == azureDevOps && !config.chat.disableAIFeatures",
+				"inputSchema": {
+					"type": "object",
+					"properties": {
+						"repository": {
+							"type": "string",
+							"description": "Discovered repository name."
+						},
+						"project": {
+							"type": "string"
+						},
+						"organizationUrl": {
+							"type": "string"
+						},
+						"title": {
+							"type": "string"
+						},
+						"description": {
+							"type": "string"
+						},
+						"source": {
+							"type": "string"
+						},
+						"target": {
+							"type": "string"
+						},
+						"draft": {
+							"type": "boolean"
+						}
+					},
+					"required": [
+						"title",
+						"source",
+						"target"
+					],
+					"additionalProperties": false
+				}
+			},
+			{
+				"name": "azure-devops_resolve_review_thread",
+				"displayName": "%azureDevOps.tools.resolve_review_thread.title%",
+				"userDescription": "%azureDevOps.tools.resolve_review_thread.description%",
+				"modelDescription": "Resolve an Azure DevOps pull request discussion thread. Requires user confirmation. Only repositories discovered in the workspace are accepted; disambiguate with repository, project, and organizationUrl.",
+				"toolReferenceName": "azdo_resolve_review_thread",
+				"canBeReferencedInPrompt": true,
+				"tags": [
+					"azure-devops",
+					"pull-requests",
+					"work-items"
+				],
+				"when": "config.azureDevOps.provider == azureDevOps && !config.chat.disableAIFeatures",
+				"inputSchema": {
+					"type": "object",
+					"properties": {
+						"repository": {
+							"type": "string",
+							"description": "Discovered repository name."
+						},
+						"project": {
+							"type": "string"
+						},
+						"organizationUrl": {
+							"type": "string"
+						},
+						"id": {
+							"type": "integer",
+							"minimum": 1
+						},
+						"threadId": {
+							"type": "integer",
+							"minimum": 1
+						}
+					},
+					"required": [
+						"id",
+						"threadId"
+					],
+					"additionalProperties": false
+				}
+			},
+			{
+				"name": "azure-devops_work_item_fetch",
+				"displayName": "%azureDevOps.tools.work_item_fetch.title%",
+				"userDescription": "%azureDevOps.tools.work_item_fetch.description%",
+				"modelDescription": "Get an Azure Boards work item and its comments. Only repositories discovered in the workspace are accepted; disambiguate with repository, project, and organizationUrl.",
+				"toolReferenceName": "azdo_work_item_fetch",
+				"canBeReferencedInPrompt": true,
+				"tags": [
+					"azure-devops",
+					"pull-requests",
+					"work-items"
+				],
+				"when": "config.azureDevOps.provider == azureDevOps && !config.chat.disableAIFeatures",
+				"inputSchema": {
+					"type": "object",
+					"properties": {
+						"repository": {
+							"type": "string",
+							"description": "Discovered repository name."
+						},
+						"project": {
+							"type": "string"
+						},
+						"organizationUrl": {
+							"type": "string"
+						},
+						"id": {
+							"type": "integer",
+							"minimum": 1
+						}
+					},
+					"required": [
+						"id"
+					],
+					"additionalProperties": false
+				}
+			},
+			{
+				"name": "azure-devops_labels_fetch",
+				"displayName": "%azureDevOps.tools.labels_fetch.title%",
+				"userDescription": "%azureDevOps.tools.labels_fetch.description%",
+				"modelDescription": "Get labels on an Azure DevOps pull request. Only repositories discovered in the workspace are accepted; disambiguate with repository, project, and organizationUrl.",
+				"toolReferenceName": "azdo_labels_fetch",
+				"canBeReferencedInPrompt": true,
+				"tags": [
+					"azure-devops",
+					"pull-requests",
+					"work-items"
+				],
+				"when": "config.azureDevOps.provider == azureDevOps && !config.chat.disableAIFeatures",
+				"inputSchema": {
+					"type": "object",
+					"properties": {
+						"repository": {
+							"type": "string",
+							"description": "Discovered repository name."
+						},
+						"project": {
+							"type": "string"
+						},
+						"organizationUrl": {
+							"type": "string"
+						},
+						"id": {
+							"type": "integer",
+							"minimum": 1
+						}
+					},
+					"required": [
+						"id"
+					],
+					"additionalProperties": false
+				}
+			},
+			{
+				"name": "azure-devops_notifications_fetch",
+				"displayName": "%azureDevOps.tools.notifications_fetch.title%",
+				"userDescription": "%azureDevOps.tools.notifications_fetch.description%",
+				"modelDescription": "Get this extension's locally tracked unread Azure DevOps pull request activity. Only repositories discovered in the workspace are accepted; disambiguate with repository, project, and organizationUrl.",
+				"toolReferenceName": "azdo_notifications_fetch",
+				"canBeReferencedInPrompt": true,
+				"tags": [
+					"azure-devops",
+					"pull-requests",
+					"work-items"
+				],
+				"when": "config.azureDevOps.provider == azureDevOps && !config.chat.disableAIFeatures",
+				"inputSchema": {
+					"type": "object",
+					"properties": {
+						"repository": {
+							"type": "string",
+							"description": "Discovered repository name."
+						},
+						"project": {
+							"type": "string"
+						},
+						"organizationUrl": {
+							"type": "string"
+						}
+					},
+					"required": [],
+					"additionalProperties": false
+				}
+			},
+			{
+				"name": "azure-devops_search",
+				"displayName": "%azureDevOps.tools.search.title%",
+				"userDescription": "%azureDevOps.tools.search.description%",
+				"modelDescription": "Search Azure Boards work items with WIQL, scoped to a discovered project. Only repositories discovered in the workspace are accepted; disambiguate with repository, project, and organizationUrl.",
+				"toolReferenceName": "azdo_search",
+				"canBeReferencedInPrompt": true,
+				"tags": [
+					"azure-devops",
+					"pull-requests",
+					"work-items"
+				],
+				"when": "config.azureDevOps.provider == azureDevOps && !config.chat.disableAIFeatures",
+				"inputSchema": {
+					"type": "object",
+					"properties": {
+						"repository": {
+							"type": "string",
+							"description": "Discovered repository name."
+						},
+						"project": {
+							"type": "string"
+						},
+						"organizationUrl": {
+							"type": "string"
+						},
+						"query": {
+							"type": "string"
+						}
+					},
+					"required": [
+						"query"
+					],
+					"additionalProperties": false
 				}
 			}
 		]

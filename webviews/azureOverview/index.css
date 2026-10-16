@@ -1,0 +1,63 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+body {
+	color: var(--vscode-editor-foreground);
+	background: var(--vscode-editor-background);
+	font-family: var(--vscode-font-family);
+	font-size: var(--vscode-font-size);
+	padding: 24px;
+	max-width: 1400px;
+	margin: auto;
+}
+
+h1 { font-size: 1.8em; overflow-wrap: anywhere; }
+h2 { font-size: 1.2em; }
+.layout { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 24px; }
+section, .pr-header { border-bottom: 1px solid var(--vscode-panel-border); padding-bottom: 16px; margin-bottom: 20px; }
+.thread { border: 1px solid var(--vscode-panel-border); border-radius: 4px; padding: 12px; margin: 12px 0; }
+.comment, .pending { padding: 12px 0; border-bottom: 1px solid var(--vscode-panel-border); }
+.pending { border-left: 3px solid var(--vscode-editorInfo-foreground); padding-left: 12px; }
+.muted { color: var(--vscode-descriptionForeground); }
+.badge { display: inline-block; padding: 3px 6px; margin: 2px; border: 1px solid var(--vscode-panel-border); border-radius: 12px; }
+button {
+	background: var(--vscode-button-background);
+	color: var(--vscode-button-foreground);
+	border: 1px solid var(--vscode-button-border, transparent);
+	padding: 5px 10px;
+	margin: 3px;
+	cursor: pointer;
+	font: inherit;
+}
+button:hover { background: var(--vscode-button-hoverBackground); }
+button:disabled { opacity: .5; cursor: wait; }
+button:focus-visible, textarea:focus-visible, a:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-offset: 2px; }
+textarea {
+	display: block;
+	width: 100%;
+	box-sizing: border-box;
+	background: var(--vscode-input-background);
+	color: var(--vscode-input-foreground);
+	border: 1px solid var(--vscode-input-border, var(--vscode-panel-border));
+	font: inherit;
+	padding: 8px;
+	margin-top: 6px;
+	resize: vertical;
+}
+form { margin-top: 12px; }
+a { color: var(--vscode-textLink-foreground); }
+.markdown { overflow-wrap: anywhere; line-height: 1.6; }
+pre { overflow: auto; background: var(--vscode-textCodeBlock-background); padding: 12px; }
+code { font-family: var(--vscode-editor-font-family); }
+table { border-collapse: collapse; }
+td, th { border: 1px solid var(--vscode-panel-border); padding: 4px 8px; }
+blockquote { border-left: 3px solid var(--vscode-textBlockQuote-border); padding-left: 12px; }
+#error { color: var(--vscode-errorForeground); border: 1px solid var(--vscode-inputValidation-errorBorder); padding: 12px; }
+.file { margin: 4px 0; overflow-wrap: anywhere; }
+.file button { text-align: left; overflow-wrap: anywhere; max-width: 100%; }
+@media (max-width: 760px) {
+	body { padding: 12px; }
+	.layout { grid-template-columns: minmax(0, 1fr); }
+}

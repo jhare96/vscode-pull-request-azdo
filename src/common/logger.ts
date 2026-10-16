@@ -17,7 +17,10 @@ class Log extends Disposable {
 
 	constructor() {
 		super();
-		this._outputChannel = this._register(vscode.window.createOutputChannel('GitHub Pull Request', { log: true }));
+		this._outputChannel = this._register(vscode.window.createOutputChannel(
+			vscode.workspace.getConfiguration('azureDevOps').get<string>('provider', 'azureDevOps') === 'azureDevOps' ? 'Azure DevOps' : 'GitHub Pull Request',
+			{ log: true },
+		));
 	}
 
 	public startPerfMarker(marker: string) {

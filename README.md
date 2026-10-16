@@ -1,108 +1,182 @@
-[![Build Status](https://dev.azure.com/vscode/vscode-pull-request-github/_apis/build/status/vscode-pull-request-github%20%28pr%29?branchName=main)](https://dev.azure.com/vscode/vscode-pull-request-github/_build?definitionId=44&branchName=main)
+# Azure DevOps Pull Requests for VS Code
 
-> Review and manage your GitHub pull requests and issues directly in VS Code
+Review Azure DevOps pull requests and manage Azure Boards work items from VS Code.
+The Azure implementation is written in this repository, without copying another
+Azure DevOps extension. It uses the Azure DevOps REST APIs and the existing VS Code
+Git integration; it does not translate Azure requests into GitHub API requests.
 
-This extension allows you to review and manage GitHub pull requests and issues in Visual Studio Code. The support includes:
+## Getting started
 
-- Authenticating and connecting VS Code to GitHub and GitHub Enterprise.
-- Listing and browsing PRs from within VS Code.
-- Reviewing PRs from within VS Code with in-editor commenting.
-- Validating PRs from within VS Code with easy checkouts.
-- Terminal integration that enables UI and CLIs to co-exist.
-- Listing and browsing issues from within VS Code.
-- Hover cards for "@" mentioned users and for issues.
-- Completion suggestions for users and issues.
-- A "Start working on issue" action which can create a branch for you.
-- Code actions to create issues from "todo" comments.
+1. Open a local Git repository with an Azure DevOps remote.
+2. Open **Azure DevOps** in the activity bar.
+3. Run **Azure DevOps: Sign In** and select a Microsoft account or a personal access token.
+4. Click a pull request to open its HTML overview inside VS Code. Expand its tree
+   entry to browse changed files, reviewers, commit history, statuses, and discussion.
+   Use its **Pull Request Actions** menu for additional operations.
 
-![PR Demo](.readme/demo.gif)
+Azure DevOps Services HTTPS and SSH remotes are detected, including legacy
+`organization.visualstudio.com` and `vs-ssh.visualstudio.com` remotes. Git
+`url.*.insteadOf` aliases, multi-root workspaces, and multiple remotes are supported.
+Git itself continues to use your existing Git credentials;
+extension sign-in does not modify Git credentials or remote URLs.
 
-![Issue Demo](.readme/issueDemo.gif)
+Personal access tokens are validated before being saved in **VS Code Secret Storage**,
+separately for each organization or server collection. They are never stored in
+settings, Git configuration, or logs. Grant **Code (read & write)**,
+**Work Items (read & write)**, and **Project and Team (read)** permissions for the full
+workflow. Azure permissions and branch policies still apply; tokens do not grant
+permissions your account does not have.
 
-# Getting Started
+**Sign Out** forgets this extension's PAT and disables its automatic Microsoft sign-in
+for the selected organization. It does not sign other extensions out of a shared
+Microsoft account. Run **Sign In** to reconnect.
 
-It's easy to get started with GitHub Pull Requests for Visual Studio Code. Simply follow these steps to get started.
+## Azure workflows
 
-1. Install the extension from within VS Code or download it from [the marketplace](https://aka.ms/vscodepr-download).
-1. Open your desired GitHub repository in VS Code.
-1. A new viewlet will appear on the activity bar which shows a list of pull requests and issues.
-1. Use the button on the viewlet to sign in to GitHub.
-1. You may need to configure the `githubPullRequests.remotes` setting, by default the extension will look for PRs for `origin` and `upstream`. If you have different remotes, add them to the remotes list.
-1. You should be good to go!
+- Browse active pull requests, or include completed/abandoned pull requests.
+- Create and publish draft PRs; edit titles and descriptions; abandon and reactivate PRs.
+- Push the current branch and create a PR against a selected target branch.
+- Review immutable, merge-base-to-source diffs without checking out the PR.
+- Publish inline/file comments and replies; edit/delete comments; resolve/reopen threads.
+  Comment positions are requested for the displayed iteration. Open the native
+  HTML overview to read general and inline conversations, reply, edit/delete your
+  comments, like comments, and resolve/reopen threads. The native Comments panel
+  remains available through **Open Discussion in Comments Panel**.
+- Start a private pending review, edit/delete its drafts, and submit comments with
+  an optional review vote. Drafts survive reloads and failed submissions.
+- Like and unlike comments using Azure DevOps' native comment likes.
+- Apply plain Markdown suggestion blocks from source-side review comments to the
+  checked-out source. Dirty or modified files and mismatched commits are rejected;
+  edits remain undoable and are not committed automatically.
+- Toggle files as viewed in the changes tree. Viewed state is local to the
+  workspace and resets after source pushes.
+- Submit Azure review votes, select reviewers from project teams, and remove reviewers.
+- Manage PR labels and link or browse related Azure Boards work items.
+- View commit statuses and branch-policy evaluations. Complete with merge, squash,
+  rebase, or rebase-with-merge; optionally delete the source branch or set auto-complete.
+- Check out a PR's server-generated merge commit for validation. This uses a detached
+  HEAD and does not overwrite a local branch. Return using **Git: Checkout**. Check out
+  the source branch separately to author changes.
+- Create cross-fork PRs and check out a fork's source branch for authoring.
+- Navigate unambiguous branch-based PR stacks and complete them bottom-to-top.
+- Track local unread activity on authored PRs, review requests, and mentions.
+- Browse work items with WIQL; read details/comments; create work items from selected
+  text; edit titles, HTML descriptions, states, assignments, and tags; add comments.
+- Start a work-item branch and prefill the Git commit input with `AB#<id>`.
+- Hover over `AB#123`, `#123` (work item), or `!123` (PR) in workspace files and
+  review comment inputs. Complete
+  `#` work items, `!` PRs, and `@` identities from project teams; hover over mentioned
+  users to see their identity.
+- Create a work item from a `TODO` using an editor code action.
+- Use registered title/description generation and local code-review providers,
+  PR description templates, and the extension's public Git/repository API.
+- Use Azure chat tools to fetch PRs, checks, discussions, work items, labels, and
+  unread activity; search with WIQL; open/create PRs; and resolve threads. Tools
+  cannot redirect authenticated requests outside discovered workspace repositories.
+  Mutating chat tools require confirmation.
+- Attach Azure PRs and Boards work items to chat when the VS Code chat-context API
+  is available. Open review/overview tabs supply their native context. PR tools
+  expose changed files and optionally immutable base/source contents for a selected
+  changed-file path; unrelated file paths are rejected.
+- Use Live Share Git integration and suggested project-team contacts when the
+  Live Share extension is installed.
 
-Check out https://www.youtube.com/watch?v=LdSwWxVzUpo for additional getting started tips!
+Comments publish immediately unless a pending review has been started. Pending
+reviews are stored locally in workspace state, not on an Azure review-draft server.
+Submission is incremental: acknowledged comments leave the queue, and hidden
+comment markers prevent duplicate publication when retrying after an interrupted
+submission. The vote is sent only after all comments succeed. Account changes
+prevent submission; source changes require comment-only submission against the
+original iteration, or discarding and restarting the review before voting.
 
-# Configuring the extension
+Stack completion refreshes each PR, checks the reviewed source commits, retargets
+the next PR to the bottom target, and waits for Azure to confirm each merge.
+It uses merge commits, retains source branches, and stops on policy failures,
+conflicts, or timeout rather than completing the remaining stack.
 
-There are several settings that can be used to configure the extension.
+Notifications are a **local activity view**, not a fabricated Azure server inbox.
+Read state belongs to the workspace; changes make a conversation unread again.
+The visible view refreshes every minute. Azure supports like/unlike, not GitHub's
+full emoji reaction repertoire.
 
-## GitHub Enterprise
+Work item types and states are validated by the project's Azure Boards process.
+Binary files produce an explicit message directing you to the browser.
+API and authentication failures are shown in the tree or a notification and recorded
+in the **Azure DevOps** output channel.
 
-VS Code 1.141 or later is required. If you use Insiders, keep it updated to the latest build.
-
-Configure GHE.com and GitHub Enterprise Server instances using the built-in GitHub Authentication setting:
+## Configuration
 
 ```json
 {
-	"github-enterprise.uris": [
-		"https://company.ghe.com",
-		"https://github.example.com"
-	]
+	"azureDevOps.remotes": ["origin", "upstream"],
+	"azureDevOps.pullRequestStatus": "active",
+	"azureDevOps.queries": [
+		{ "label": "Created by me", "author": "@me" },
+		{ "label": "Waiting for my review", "reviewer": "@me", "waiting": true },
+		{ "label": "Targeting main", "target": "refs/heads/main" }
+	],
+	"azureDevOps.workItemQuery": "SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = @project AND [System.AssignedTo] = @me ORDER BY [System.ChangedDate] DESC"
 }
 ```
 
-The list order does not select a default instance. An explicitly configured list takes precedence over the deprecated `github-enterprise.uri` setting, including an empty list (`[]`), which disables Enterprise instances. If the list is not configured, the legacy setting still applies. Workspace and folder instance settings only apply in trusted workspaces.
+Query categories accept `label`, `author`, `reviewer`, `status`, `source`, `target`,
+and `waiting`. Author/reviewer filters use identity IDs or `@me`; branch filters use
+full refs. Status defaults to `active` and also accepts `completed`, `abandoned`,
+or `all`. Set `azureDevOps.queries` to `[]` for a flat list controlled by
+`azureDevOps.pullRequestStatus`.
 
-GitHub Pull Requests uses **one selected Enterprise account at a time**, alongside a separate GitHub.com account. When another instance is needed or no account is selected, use **Select Account** in the Pull Requests or Login view. This opens account preferences for this extension and GitHub Enterprise directly, or starts sign-in if you have no Enterprise accounts yet. You can also run **GitHub Pull Requests: Select GitHub Enterprise Account...** or use **Accounts > Manage Extension Account Preferences...**. To add another instance, edit `github-enterprise.uris` in Settings; ordinary sign-in does not replace your existing list.
+For Azure DevOps Server, explicitly trust the **HTTPS collection URL** in user/machine
+settings before signing in with a PAT:
 
-Removing an instance from the list does not delete its saved sign-ins. GitHub.com accounts do not need either Enterprise setting.
-
-## Remotes and queries
-
-As mentioned above, `githubPullRequests.remotes` is used to specify what remotes the extension should try to fetch pull requests from.
-
-To customize the pull request tree, you can use the `githubPullRequests.queries` setting. This setting is a list of labels and search queries which populate the categories of the tree. By default, these queries are "Waiting For My Review", "Assigned To Me", and "Created By Me". An example of adding a "Mentioned Me" category is to change the setting to the following:
-
-```
-"githubPullRequests.queries": [
-	{
-		"label": "Waiting For My Review",
-		"query": "is:open review-requested:${user}"
-	},
-	{
-		"label": "Assigned To Me",
-		"query": "is:open assignee:${user}"
-	},
-	{
-		"label": "Created By Me",
-		"query": "is:open author:${user}"
-	},
-	{
-		"label": "Mentioned Me",
-		"query": "is:open mentions:${user}"
-	}
-]
+```json
+{
+	"azureDevOps.serverCollections": ["https://server.example/tfs/DefaultCollection"]
+}
 ```
 
-Similarly, there is a setting to configure your issues queries: `githubIssues.queries`.
+Server deployments must support REST API 7.1. Server SSH remotes are mapped to a
+trusted HTTPS collection on the same hostname and collection path; its HTTPS port
+may differ from the SSH port. Arbitrary hosts, HTTP connections, and cross-host
+authentication redirects are not accepted.
 
-Queries use [GitHub search syntax](https://help.github.com/en/articles/understanding-the-search-syntax).
+## Compatibility and migration boundaries
 
-To view additional settings for the extension, you can open VS Code settings and search for "github pull requests".
+Azure DevOps is the default provider and does not activate the GitHub workflows.
+The original GitHub implementation has not been deleted. To use it, enable VS Code's
+built-in GitHub Authentication extension, set `"azureDevOps.provider": "github"`,
+and reload the window. Its `githubPullRequests.*` and `githubIssues.*` settings remain
+unchanged. Azure settings do not translate GitHub search queries.
 
-# Issues
+The Azure path uses native VS Code trees/diffs and an extension-owned HTML PR
+overview. Clicking a PR opens a reusable editor tab with its Markdown description,
+changed files, discussion, reviewers/votes, checks/policies, labels, linked work
+items, and review/completion controls. Completion and management controls reuse the
+existing Azure workflows and their confirmation/policy safeguards. Unsent comment
+text survives refreshes, and failed submissions leave it intact.
 
-This extension is still in development, so please refer to our [issue tracker for known issues](https://github.com/Microsoft/vscode-pull-request-github/issues), and please contribute with additional information if you encounter an issue yourself.
+The overview is **not an embedded Azure DevOps website**: its layout is maintained
+by the extension and does not automatically inherit Azure website changes.
+**Open in Azure DevOps** opens the current official page in your browser.
+Azure equivalents retain PR, review, issue/work-item, local Git, provider, and chat
+workflows with the native differences described above. GitHub-hosted services such
+as Codespaces, GitHub merge queues, and Copilot cloud-agent sessions have no Azure
+DevOps API equivalent. They remain available only in GitHub compatibility mode;
+switching providers does not make those hosted services operate against Azure.
 
-## Questions? Authentication? GitHub Enterprise?
+## Development
 
-See our [wiki](https://github.com/Microsoft/vscode-pull-request-github/wiki) for our FAQ.
+Use the existing build and check commands:
 
-## Contributing
+```sh
+npm ci
+npm run compile
+npm run compile:test
+npx mocha 'out/src/test/azure/client.test.js' 'out/src/test/azure/remote.test.js'
+npm run lint
+npm run hygiene
+```
 
-If you're interested in contributing, or want to explore the source code of this extension yourself, see our [contributing guide](https://github.com/Microsoft/vscode-pull-request-github/wiki/Contributing), which includes:
-
-- [How to Build and Run](https://github.com/Microsoft/vscode-pull-request-github/wiki/Contributing#build-and-run)
-- [Architecture](https://github.com/Microsoft/vscode-pull-request-github/wiki/Contributing#architecture)
-- [Making Pull Requests](https://github.com/Microsoft/vscode-pull-request-github/wiki/Contributing#pull-requests)
-- [Code of Conduct](https://github.com/Microsoft/vscode-pull-request-github/wiki/Contributing#code-of-conduct)
+Authentication and review-wiring tests run in the repository's VS Code extension-host test suite.
+REST-client tests use injected HTTP responses and exercise product code without an
+Azure account. A live Azure organization is still required to validate tenant
+authentication, permissions, server compatibility, and end-to-end UI behavior.
