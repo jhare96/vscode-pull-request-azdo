@@ -145,6 +145,17 @@ const InlineReviewers = ({ pr, isSimple }: { pr: PullRequest; isSimple: boolean 
 	);
 };
 
+export const SectionError = ({ message }: { message: string }) => {
+	const { refresh } = useContext(PullRequestContext);
+	return (
+		<div className="status-item status-section section-error" role="alert">
+			{warningIcon}
+			<p>{message}</p>
+			<button className="secondary" onClick={() => refresh()}>Retry</button>
+		</div>
+	);
+};
+
 export const StatusChecksSection = ({ pr, isSimple }: { pr: PullRequest; isSimple: boolean }) => {
 	if (pr.isIssue) {
 		return null;
@@ -156,7 +167,9 @@ export const StatusChecksSection = ({ pr, isSimple }: { pr: PullRequest; isSimpl
 				<>
 					<PRStatusMessage pr={pr} isSimple={isSimple} />
 					<RequiredReviewers pr={pr} />
-					<StatusChecks pr={pr} />
+					{pr.checksError
+						? <SectionError message={`Unable to load checks and policies: ${pr.checksError}. Completion is unavailable until they load.`} />
+						: <StatusChecks pr={pr} />}
 					<InlineReviewers pr={pr} isSimple={isSimple} />
 					{!isSimple ? <StackSection pr={pr} /> : null}
 					<MergeStatusAndActions pr={pr} isSimple={isSimple} />
@@ -351,7 +364,7 @@ export const ReadyForReview = ({ isSimple, isCopilotOnMyBehalf, mergeMethod }: {
 						}
 						let ctx: ReadyForReviewContext | ReadyForReviewAndMergeContext = {
 							'preventDefaultContextMenuItems': true,
-							'github:readyForReviewMenu': true,
+							'azureDevOps:readyForReviewMenu': true,
 							owner: pr.owner,
 							repo: pr.repo,
 							number: pr.number,
@@ -359,7 +372,7 @@ export const ReadyForReview = ({ isSimple, isCopilotOnMyBehalf, mergeMethod }: {
 						if (isCopilotOnMyBehalf) {
 							ctx = {
 								...ctx,
-								'github:readyForReviewMenuWithMerge': true,
+								'azureDevOps:readyForReviewMenuWithMerge': true,
 								mergeMethod,
 							};
 						}

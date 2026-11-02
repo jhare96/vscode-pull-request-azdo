@@ -120,14 +120,14 @@ export async function setReplyAuthor(thread: vscode.CommentThread | vscode.Comme
 	if (currentUser.avatarUrl) {
 		const thread2 = thread as vscode.CommentThread2;
 		if (!DataUri.isGitHubDotComAvatar(currentUser.avatarUrl)) {
-			thread2.canReply = { name: currentUser.name ?? currentUser.login, iconPath: undefined };
+			thread2.canReply = { name: currentUser.name ?? currentUser.login, iconPath: DataUri.initialsAsImageDataURI(currentUser, 28) };
 			return;
 		}
 		thread2.canReply = { name: currentUser.name ?? currentUser.login, iconPath: vscode.Uri.parse(currentUser.avatarUrl) };
 		const uri = await DataUri.avatarCirclesAsImageDataUris(context, [currentUser], 28, 28);
 		thread2.canReply = { name: currentUser.name ?? currentUser.login, iconPath: uri[0] };
 	} else {
-		thread.canReply = true;
+		(thread as vscode.CommentThread2).canReply = { name: currentUser.name ?? currentUser.login, iconPath: DataUri.initialsAsImageDataURI(currentUser, 28) };
 	}
 }
 
@@ -1818,6 +1818,10 @@ export function getAvatarWithEnterpriseFallback(avatarUrl: string, email: string
 }
 
 export function getPullsUrl(repo: GitHubRepository) {
+	const azure = repo.remote.gitProtocol.normalizeUri();
+	if (repo.remote.gitProtocol.azureRemote && azure) {
+		return vscode.Uri.joinPath(azure, 'pullrequests');
+	}
 	return vscode.Uri.parse(`https://${repo.remote.host}/${repo.remote.owner}/${repo.remote.repositoryName}/pulls`);
 }
 

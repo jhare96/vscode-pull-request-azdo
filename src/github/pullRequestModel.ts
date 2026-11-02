@@ -63,6 +63,7 @@ import {
 	MergeQueueEntry,
 	PullRequest,
 	PullRequestChecks,
+	PullRequestCommit,
 	PullRequestMergeability,
 	PullRequestMergeabilityResult,
 	PullRequestReviewRequirement,
@@ -92,6 +93,7 @@ import {
 } from './utils';
 import { Change, Repository } from '../api/api';
 import { Status } from '../api/api1';
+import { renderAzureMarkdown } from '../azure/markdown';
 import { COPILOT_ACCOUNTS, DiffSide, IComment, IReviewThread, SubjectType, ViewedState } from '../common/comment';
 import { getGitChangeType, getModifiedContentFromDiffHunk, parseDiff } from '../common/diffHunk';
 import { commands } from '../common/executeCommands';
@@ -104,6 +106,7 @@ import { ITelemetry } from '../common/telemetry';
 import { ClosedEvent, EventType, ReviewEvent, ReviewResolveInfo, TimelineEvent } from '../common/timelineEvent';
 import { resolvePath, Schemes, toGitHubCommitUri, toPRUri, toReviewUri } from '../common/uri';
 import { formatError, isDescendant, isObject } from '../common/utils';
+import { ProviderDiscussions, ProviderSnapshot, ProviderUnsupportedError } from '../providers/pullRequestProvider';
 import { InMemFileChangeModel, RemoteFileChangeModel } from '../view/fileChangeModel';
 
 interface IPullRequestModel {
@@ -161,8 +164,114 @@ function parseAsyncMergeResponse(value: unknown): AsyncMergeResponse {
 	throw new Error('GitHub returned an unknown stack merge result.');
 }
 
+const PROVIDER_SNAPSHOT_REUSE_MS = 3000;
+
 export class PullRequestModel extends IssueModel<PullRequest> implements IPullRequestModel {
 	static override ID = 'PullRequestModel';
+	public providerSnapshot?: ProviderSnapshot;
+	private providerSnapshotState?: { at: number; writes: number | undefined };
+
+	private async refreshProviderSnapshot(): Promise<ProviderSnapshot> {
+		const model = await this.githubRepository.getPullRequest(this.number, 'PullRequestModel.refreshProviderSnapshot');
+		if (model !== this || !model.providerSnapshot) {
+			throw new Error('Azure DevOps did not update the existing pull request model.');
+		}
+		return model.providerSnapshot;
+	}
+
+	private applyProviderPullRequest(item: PullRequest): void {
+		// Section data (labels, commits, comment counts) is owned by snapshots, not by mutation responses.
+		this.update({ ...item, labels: this.item.labels, commits: this.item.commits, commentCount: this.item.commentCount });
+	}
+
+	private async providerReviewEvent(event: ReviewEventEnum, body: string): Promise<ReviewEvent> {
+		return {
+			id: -Date.now(), event: EventType.Reviewed, comments: [], submittedAt: new Date().toISOString(), body,
+			bodyHTML: body ? renderAzureMarkdown(body) : undefined, htmlUrl: this.html_url,
+			user: await this.githubRepository.getAuthenticatedUser(), authorAssociation: '',
+			state: event === ReviewEventEnum.Approve ? 'APPROVED' : event === ReviewEventEnum.RequestChanges ? 'CHANGES_REQUESTED' : 'COMMENTED',
+		};
+	}
+
+	private async submitProviderReview(event: ReviewEventEnum, body: string, expectedHead: string | undefined): Promise<ReviewEvent> {
+		if (!expectedHead) {
+			throw new Error(vscode.l10n.t('The reviewed source commit is unknown. Refresh the pull request before submitting a review.'));
+		}
+		await this.githubRepository.provider!.submitReview(this.number, event, body, expectedHead);
+		this.hasPendingReview = false;
+		await this.updateDraftModeContext();
+		await this.refreshProviderSnapshot();
+		this._onDidChange.fire({ timeline: true, comments: true });
+		return this.providerReviewEvent(event, body);
+	}
+
+	private async refreshProviderDiscussions(): Promise<ProviderDiscussions> {
+		// Opening a file or view asks for the timeline and threads separately, each of which would load the
+		// whole snapshot again. Reuse one loaded moments ago unless anything has been written since.
+		const state = this.providerSnapshotState;
+		const writes = this.githubRepository.provider?.writes;
+		const snapshot = this.providerSnapshot && state && writes !== undefined && state.writes === writes && Date.now() - state.at < PROVIDER_SNAPSHOT_REUSE_MS
+			? this.providerSnapshot
+			: await this.refreshProviderSnapshot();
+		if (snapshot.discussions.state === 'error') {
+			throw new Error(snapshot.discussions.message);
+		}
+		return snapshot.discussions.value;
+	}
+
+	public applyProviderSnapshot(snapshot: ProviderSnapshot): void {
+		if (this.isDisposed) {
+			throw new Error('The pull request model belongs to a closed repository session.');
+		}
+		if (snapshot.pullRequest.url !== this.html_url) {
+			throw new Error('The provider snapshot belongs to another pull request.');
+		}
+		const previousSnapshot = this.providerSnapshot;
+		this.providerSnapshot = snapshot;
+		this.providerSnapshotState = { at: Date.now(), writes: this.githubRepository.provider?.writes };
+		const changedRevision = this.head?.sha !== snapshot.pullRequest.head?.sha || this.base?.sha !== snapshot.pullRequest.base?.sha;
+		this.update({
+			...snapshot.pullRequest,
+			labels: snapshot.labels.state === 'loaded' ? snapshot.labels.value : this.item.labels,
+			commits: snapshot.commits.state === 'loaded' ? snapshot.pullRequest.commits : this.item.commits,
+			commentCount: snapshot.discussions.state === 'loaded' ? snapshot.pullRequest.commentCount : this.item.commentCount,
+		});
+		if (changedRevision && snapshot.discussions.state === 'error') {
+			this.clear();
+			this.timelineEvents = [];
+		}
+		if (snapshot.discussions.state === 'loaded') {
+			const previous = this._reviewThreadsCache ?? [];
+			const current = snapshot.discussions.value.threads;
+			this._reviewThreadsCache = current;
+			this._reviewThreadsCacheInitialized = true;
+			const comments = current.flatMap(thread => thread.comments);
+			if (!equals(this.comments, comments)) {
+				this.comments = comments;
+			}
+			this.timelineEvents = snapshot.discussions.value.events;
+			const changes = {
+				added: current.filter(thread => !previous.some(old => old.id === thread.id)),
+				removed: previous.filter(thread => !current.some(next => next.id === thread.id)),
+				changed: current.filter(thread => previous.some(old => old.id === thread.id && !equals(old, thread))),
+			};
+			if (changes.added.length || changes.removed.length || changes.changed.length) {
+				this._onDidChangeReviewThreads.fire(changes);
+			}
+		}
+		const changes: IssueChangeEvent = {};
+		if (!equals(previousSnapshot?.reviewers, snapshot.reviewers)) {
+			this.reviewers = snapshot.reviewers.map(review => review.reviewer);
+			changes.reviewers = true;
+		}
+		if (!equals(previousSnapshot?.discussions, snapshot.discussions) || !equals(previousSnapshot?.checks, snapshot.checks)
+			|| !equals(previousSnapshot?.labels, snapshot.labels) || !equals(previousSnapshot?.commits, snapshot.commits)) {
+			changes.providerSections = true;
+		}
+		if (Object.keys(changes).length) {
+			this._onDidChange.fire(changes);
+		}
+	}
 
 	public isDraft?: boolean;
 	public reviewers?: (IAccount | ITeam)[];
@@ -464,6 +573,28 @@ export class PullRequestModel extends IssueModel<PullRequest> implements IPullRe
 		email?: string
 	): Promise<{ merged: boolean, message: string, timeline?: TimelineEvent[] }> {
 		Logger.debug(`Merging PR: ${this.number} method: ${method} for user: "${email}" - enter`, PullRequestModel.ID);
+		const provider = this.githubRepository.provider;
+		if (provider) {
+			let expectedHead = this.head?.sha;
+			if (this.isActive) {
+				expectedHead = repository.state.HEAD?.commit;
+				const localChangesWarning = await this.confirmLocalChanges(repository);
+				if (localChangesWarning) {
+					return { merged: false, message: localChangesWarning };
+				}
+			}
+			if (!expectedHead) {
+				throw new Error(vscode.l10n.t('The pull request source commit is unknown. Refresh before completing the pull request.'));
+			}
+			const mergeMethod = method ?? vscode.workspace.getConfiguration(PR_SETTINGS_NAMESPACE).get<MergeMethod>(DEFAULT_MERGE_METHOD, 'merge');
+			const message = [title, description].filter(Boolean).join('\n\n') || undefined;
+			const item = await provider.merge(this.number, mergeMethod, expectedHead, false, message);
+			this.applyProviderPullRequest(item);
+			if (!item.merged) {
+				return { merged: false, message: vscode.l10n.t('Azure DevOps accepted the completion request, but the pull request has not completed yet. Check required policies and refresh.') };
+			}
+			return { merged: true, message: '', timeline: await this.getTimelineEvents() };
+		}
 		const { mutate, schema } = await this.githubRepository.ensure();
 
 		const workingDirectorySHA = repository.state.HEAD?.commit;
@@ -500,7 +631,7 @@ export class PullRequestModel extends IssueModel<PullRequest> implements IPullRe
 				/* __GDPR__
 					"pr.merge.success" : {}
 				*/
-				this._telemetry.sendTelemetryEvent('pr.merge.success');
+				this._telemetry.sendTelemetryEvent('azdo.pr.merge.success');
 				this._onDidChange.fire({ state: true });
 				return { merged: true, message: '', timeline: await parseCombinedTimelineEvents(result.data?.mergePullRequest.pullRequest.timelineItems.nodes ?? [], await this.getCopilotTimelineEvents(), this.githubRepository) };
 			})
@@ -508,7 +639,7 @@ export class PullRequestModel extends IssueModel<PullRequest> implements IPullRe
 				/* __GDPR__
 					"pr.merge.failure" : {}
 				*/
-				this._telemetry.sendTelemetryErrorEvent('pr.merge.failure');
+				this._telemetry.sendTelemetryErrorEvent('azdo.pr.merge.failure');
 				const graphQLErrors = e.graphQLErrors as GraphQLError[] | undefined;
 				if (graphQLErrors?.length && graphQLErrors.find(error => error.type === GraphQLErrorType.Unprocessable && error.message?.includes('Head branch was modified'))) {
 					return { merged: false, message: vscode.l10n.t('Head branch was modified. Pull, review, then try again.') };
@@ -616,6 +747,13 @@ export class PullRequestModel extends IssueModel<PullRequest> implements IPullRe
 	 * Close the pull request.
 	 */
 	override async close(): Promise<{ item: PullRequest; closedEvent: ClosedEvent }> {
+		const provider = this.githubRepository.provider;
+		if (provider) {
+			const item = await provider.close(this.number);
+			this.applyProviderPullRequest(item);
+			const actor = await this.githubRepository.getAuthenticatedUser();
+			return { item, closedEvent: { createdAt: item.updatedAt, event: EventType.Closed, id: `${item.id}-abandoned`, actor } };
+		}
 		const { octokit, remote } = await this.githubRepository.ensure();
 		const ret = await octokit.call(octokit.api.pulls.update, {
 			owner: remote.owner,
@@ -655,6 +793,9 @@ export class PullRequestModel extends IssueModel<PullRequest> implements IPullRe
 	 * @param message The summary comment text.
 	 */
 	private async createReview(event: ReviewEventEnum, message?: string): Promise<ReviewEvent> {
+		if (this.githubRepository.provider) {
+			return this.submitProviderReview(event, message ?? '', this.head?.sha);
+		}
 		const { octokit, remote } = await this.githubRepository.ensure();
 
 		const { data } = await octokit.call(octokit.api.pulls.createReview, {
@@ -675,6 +816,15 @@ export class PullRequestModel extends IssueModel<PullRequest> implements IPullRe
 	 * @param body The summary comment text.
 	 */
 	async submitReview(event?: ReviewEventEnum, body?: string): Promise<ReviewEvent> {
+		const provider = this.githubRepository.provider;
+		if (provider) {
+			if (event === undefined && body === undefined) {
+				// Azure single comments are published directly; there is no implicit review to submit.
+				return this.providerReviewEvent(ReviewEventEnum.Comment, '');
+			}
+			const pending = await provider.pendingReview(this.number);
+			return this.submitProviderReview(event ?? ReviewEventEnum.Comment, body ?? '', pending?.commit ?? this.head?.sha);
+		}
 		let pendingReviewId = await this.getPendingReviewId();
 		const { mutate, schema } = await this.githubRepository.ensure();
 
@@ -716,6 +866,9 @@ export class PullRequestModel extends IssueModel<PullRequest> implements IPullRe
 	 * Query to see if there is an existing review.
 	 */
 	async getPendingReviewId(): Promise<string | undefined> {
+		if (this.githubRepository.provider) {
+			return (await this.githubRepository.provider.pendingReview(this.number)) ? `azure-review:${this.number}` : undefined;
+		}
 		const { query, schema } = await this.githubRepository.ensure();
 		const currentUser = (await this.githubRepository.getAuthenticatedUser()).login;
 		try {
@@ -733,6 +886,9 @@ export class PullRequestModel extends IssueModel<PullRequest> implements IPullRe
 	}
 
 	async getViewerLatestReviewCommit(): Promise<{ sha: string } | undefined> {
+		if (this.githubRepository.provider) {
+			return undefined;
+		}
 		Logger.debug(`Fetch viewers latest review commit`, IssueModel.ID);
 		const { query, remote, schema } = await this.githubRepository.ensure();
 		const currentUser = (await this.githubRepository.getAuthenticatedUser()).login;
@@ -766,6 +922,14 @@ export class PullRequestModel extends IssueModel<PullRequest> implements IPullRe
 	 * Delete an existing in progress review.
 	 */
 	async deleteReview(): Promise<{ deletedReviewId: number; deletedReviewComments: IComment[] }> {
+		const provider = this.githubRepository.provider;
+		if (provider) {
+			const deletedReviewComments = await provider.discardReview(this.number);
+			this.hasPendingReview = false;
+			await this.updateDraftModeContext();
+			await this.refreshProviderSnapshot();
+			return { deletedReviewId: 0, deletedReviewComments };
+		}
 		const pendingReviewId = await this.getPendingReviewId();
 		if (!pendingReviewId) {
 			throw new Error(`No pending review found for pull request #${this.number}.`);
@@ -827,6 +991,17 @@ export class PullRequestModel extends IssueModel<PullRequest> implements IPullRe
 	 * @param commitId The optional commit id to start the review on. Defaults to using the current head commit.
 	 */
 	async startReview(commitId?: string): Promise<string> {
+		const provider = this.githubRepository.provider;
+		if (provider) {
+			const commit = commitId || this.head?.sha;
+			if (!commit) {
+				throw new Error(vscode.l10n.t('The pull request source commit is unknown. Refresh before starting a review.'));
+			}
+			await provider.startReview(this.number, commit);
+			this.hasPendingReview = true;
+			await this.updateDraftModeContext();
+			return `azure-review:${this.number}`;
+		}
 		const { mutate, schema } = await this.githubRepository.ensure();
 		const { data } = await mutate<StartReviewResponse>({
 			mutation: schema.StartReview,
@@ -869,6 +1044,23 @@ export class PullRequestModel extends IssueModel<PullRequest> implements IPullRe
 	): Promise<IReviewThread | undefined> {
 		if (!this.validatePullRequestModel('Creating comment failed')) {
 			return;
+		}
+		const provider = this.githubRepository.provider;
+		if (provider) {
+			const location = { path: commentPath, startLine, endLine, side };
+			let threadId: string;
+			if (suppressDraftModeUpdate) {
+				threadId = (await provider.createThread(this.number, body, location)).id;
+			} else {
+				if (!(await provider.pendingReview(this.number))) {
+					await this.startReview();
+				}
+				threadId = (await provider.addDraft(this.number, body, { location })).graphNodeId;
+				this.hasPendingReview = true;
+				await this.updateDraftModeContext();
+			}
+			await this.refreshProviderSnapshot();
+			return this._reviewThreadsCache?.find(thread => thread.id === threadId);
 		}
 		const pendingReviewId = await this.getPendingReviewId();
 
@@ -932,6 +1124,27 @@ export class PullRequestModel extends IssueModel<PullRequest> implements IPullRe
 			return;
 		}
 
+		const provider = this.githubRepository.provider;
+		if (provider) {
+			const thread = this._reviewThreadsCache?.find(thread => thread.comments.some(comment => comment.graphNodeId === inReplyTo));
+			const threadId = thread?.id ?? this.providerCommentReference(inReplyTo).threadId;
+			if (threadId.startsWith('draft:')) {
+				throw new Error(vscode.l10n.t('Submit or discard the pending review before replying to a draft comment.'));
+			}
+			let comment: IComment;
+			if (isSingleComment) {
+				comment = await provider.addComment(this.number, body, threadId);
+			} else {
+				if (!(await provider.pendingReview(this.number))) {
+					await this.startReview(commitId);
+				}
+				comment = await provider.addDraft(this.number, body, { threadId });
+				this.hasPendingReview = true;
+				await this.updateDraftModeContext();
+			}
+			await this.refreshProviderSnapshot();
+			return comment;
+		}
 		let pendingReviewId = await this.getPendingReviewId();
 		if (!pendingReviewId) {
 			pendingReviewId = await this.startReview(commitId);
@@ -997,6 +1210,9 @@ export class PullRequestModel extends IssueModel<PullRequest> implements IPullRe
 	 * Get the timeline events of a pull request, including comments, reviews, commits, merges, deletes, and assigns.
 	 */
 	async getTimelineEvents(): Promise<TimelineEvent[] | undefined> {
+		if (this.githubRepository.provider) {
+			return (await this.refreshProviderDiscussions()).events;
+		}
 		const getTimelineEvents = async () => {
 			Logger.debug(`Fetch timeline events of PR #${this.number} - enter`, PullRequestModel.ID);
 			const { query, remote, schema } = await this.githubRepository.ensure();
@@ -1041,6 +1257,9 @@ export class PullRequestModel extends IssueModel<PullRequest> implements IPullRe
 	}
 
 	async getActivityTimelineEvents(): Promise<TimelineEvent[]> {
+		if (this.githubRepository.provider) {
+			return (await this.refreshProviderDiscussions()).events;
+		}
 		Logger.debug(`Fetch timeline events of PR #${this.number} - enter`, PullRequestModel.ID);
 		const { query, remote, schema } = await this.githubRepository.ensure();
 		try {
@@ -1138,6 +1357,14 @@ export class PullRequestModel extends IssueModel<PullRequest> implements IPullRe
 	 * @param text The new comment text
 	 */
 	async editReviewComment(comment: IComment, text: string): Promise<IComment> {
+		const provider = this.githubRepository.provider;
+		if (provider) {
+			const updated = comment.graphNodeId.startsWith('draft:')
+				? await provider.editDraft(this.number, Number(comment.graphNodeId.slice('draft:'.length)), text)
+				: await provider.editComment(this.number, this.providerCommentReference(comment.graphNodeId), text);
+			await this.refreshProviderSnapshot();
+			return updated;
+		}
 		const { mutate, schema } = await this.githubRepository.ensure();
 		let threadWithComment = this._reviewThreadsCache?.find(thread =>
 			thread.comments.some(c => c.graphNodeId === comment.graphNodeId),
@@ -1181,7 +1408,17 @@ export class PullRequestModel extends IssueModel<PullRequest> implements IPullRe
 	 * Deletes a review comment.
 	 * @param commentId The comment id to delete
 	 */
-	async deleteReviewComment(commentId: string): Promise<void> {
+	async deleteReviewComment(commentId: string, graphNodeId?: string): Promise<void> {
+		const provider = this.githubRepository.provider;
+		if (provider) {
+			if (graphNodeId?.startsWith('draft:')) {
+				await provider.deleteDraft(this.number, Number(graphNodeId.slice('draft:'.length)));
+			} else {
+				await provider.deleteComment(this.number, this.providerCommentReference(graphNodeId));
+			}
+			await this.refreshProviderSnapshot();
+			return;
+		}
 		try {
 			const { octokit, remote } = await this.githubRepository.ensure();
 			const id = Number(commentId);
@@ -1421,6 +1658,11 @@ export class PullRequestModel extends IssueModel<PullRequest> implements IPullRe
 	 * @param newBaseBranch The new base branch name
 	 */
 	async updateBaseBranch(newBaseBranch: string): Promise<void> {
+		const provider = this.githubRepository.provider;
+		if (provider) {
+			this.applyProviderPullRequest(await provider.retarget(this.number, newBaseBranch));
+			return;
+		}
 		Logger.debug(`Updating base branch to ${newBaseBranch} - enter`, PullRequestModel.ID);
 		try {
 			const { mutate, schema } = await this.githubRepository.ensure();
@@ -1460,6 +1702,9 @@ export class PullRequestModel extends IssueModel<PullRequest> implements IPullRe
 	 * Get existing requests to review.
 	 */
 	async getReviewRequests(): Promise<(IAccount | ITeam)[]> {
+		if (this.githubRepository.provider) {
+			return (await this.refreshProviderSnapshot()).reviewers.map(review => review.reviewer);
+		}
 		Logger.debug('Get Review Requests - enter', PullRequestModel.ID);
 
 		const githubRepository = this.githubRepository;
@@ -1493,6 +1738,12 @@ export class PullRequestModel extends IssueModel<PullRequest> implements IPullRe
 	 * @param reviewers A list of GitHub logins
 	 */
 	async requestReview(reviewers: IAccount[], teamReviewers: ITeam[], union: boolean = false): Promise<void> {
+		const provider = this.githubRepository.provider;
+		if (provider) {
+			await provider.addReviewers(this.number, [...reviewers, ...teamReviewers]);
+			await this.refreshProviderSnapshot();
+			return;
+		}
 		const { mutate, schema } = await this.githubRepository.ensure();
 		const input: { pullRequestId: string, teamIds: string[], userIds: string[], botIds?: string[], union: boolean } = {
 			pullRequestId: this.graphNodeId,
@@ -1533,6 +1784,12 @@ export class PullRequestModel extends IssueModel<PullRequest> implements IPullRe
 	 * @param reviewer A GitHub Login
 	 */
 	async deleteReviewRequest(reviewers: IAccount[], teamReviewers: ITeam[]): Promise<void> {
+		const provider = this.githubRepository.provider;
+		if (provider) {
+			await provider.removeReviewers(this.number, [...reviewers, ...teamReviewers]);
+			await this.refreshProviderSnapshot();
+			return;
+		}
 		if (reviewers.length === 0 && teamReviewers.length === 0) {
 			return;
 		}
@@ -1581,6 +1838,10 @@ export class PullRequestModel extends IssueModel<PullRequest> implements IPullRe
 	}
 
 	async initializeReviewThreadCacheAndReviewComments(): Promise<void> {
+		if (this.githubRepository.provider) {
+			await this.getReviewThreads();
+			return;
+		}
 		const threads = await this.initializeReviewThreadCache();
 
 		this.comments = threads.map(node => node.comments)
@@ -1652,6 +1913,9 @@ export class PullRequestModel extends IssueModel<PullRequest> implements IPullRe
 	}
 
 	async getReviewThreads(): Promise<IReviewThread[]> {
+		if (this.githubRepository.provider) {
+			return (await this.refreshProviderDiscussions()).threads;
+		}
 		const raw = await this.getRawReviewComments();
 		return this.setReviewThreadCacheFromRaw(raw);
 	}
@@ -1659,7 +1923,15 @@ export class PullRequestModel extends IssueModel<PullRequest> implements IPullRe
 	/**
 	 * Get a list of the commits within a pull request.
 	 */
-	async getCommits(): Promise<OctokitCommon.PullsListCommitsResponseData> {
+	async getCommits(): Promise<PullRequestCommit[]> {
+		const provider = this.githubRepository.provider;
+		if (provider) {
+			return (await provider.commits(this.number)).map(commit => ({
+				sha: commit.sha,
+				commit: { message: commit.message, author: { name: commit.authorName, email: commit.authorEmail, date: commit.authorDate } },
+				author: null,
+			}));
+		}
 		try {
 			Logger.debug(`Fetch commits of PR #${this.number} - enter`, PullRequestModel.ID);
 			const { remote, octokit } = await this.githubRepository.ensure();
@@ -1682,8 +1954,14 @@ export class PullRequestModel extends IssueModel<PullRequest> implements IPullRe
 	 * @param commit The commit
 	 */
 	async getCommitChangedFiles(
-		commit: OctokitCommon.PullsListCommitsResponseData[0],
-	): Promise<OctokitCommon.ReposGetCommitResponseFiles> {
+		commit: PullRequestCommit,
+	): Promise<{ filename: string; status: IRawFileChange['status'] }[]> {
+		const provider = this.githubRepository.provider;
+		if (provider) {
+			const status = (type: GitChangeType): IRawFileChange['status'] =>
+				type === GitChangeType.ADD ? 'added' : type === GitChangeType.DELETE ? 'removed' : type === GitChangeType.RENAME ? 'renamed' : 'modified';
+			return (await provider.commitChanges(commit.sha)).map(change => ({ filename: change.path, status: status(change.type) }));
+		}
 		try {
 			Logger.debug(`Fetch file changes of commit ${commit.sha} in PR #${this.number} - enter`, PullRequestModel.ID,);
 			const { octokit, remote } = await this.githubRepository.ensure();
@@ -1729,6 +2007,9 @@ export class PullRequestModel extends IssueModel<PullRequest> implements IPullRe
 	}
 
 	async getStack(): Promise<PullRequestStack | undefined> {
+		if (this.githubRepository.provider) {
+			return undefined;
+		}
 		const { query, remote, schema } = await this.githubRepository.ensure();
 		let stack: PullRequestStack | undefined;
 		let after: string | null = null;
@@ -1837,7 +2118,7 @@ export class PullRequestModel extends IssueModel<PullRequest> implements IPullRe
 		/* __GDPR__
 			"pr.openChanges" : {}
 		*/
-		folderManager.telemetry.sendTelemetryEvent('pr.openChanges');
+		folderManager.telemetry.sendTelemetryEvent('azdo.pr.openChanges');
 
 		if (openToTheSide) {
 			if (vscode.window.tabGroups.all.length < 2) {
@@ -2125,6 +2406,10 @@ export class PullRequestModel extends IssueModel<PullRequest> implements IPullRe
 	}
 
 	async getAllFileChangesInfo(): Promise<{ changes: (InMemFileChange | SlimFileChange)[], mergeBase: string }> {
+		if (this.githubRepository.provider) {
+			const files = await this.getRawFileChangesInfo();
+			return { changes: await parseDiff(files, this.mergeBase!), mergeBase: this.mergeBase! };
+		}
 		const githubRepository = this.githubRepository;
 		const { octokit, remote } = await githubRepository.ensure();
 		if (this.item.merged) {
@@ -2144,6 +2429,13 @@ export class PullRequestModel extends IssueModel<PullRequest> implements IPullRe
 	}
 
 	async getPatch(): Promise<string> {
+		if (this.githubRepository.provider) {
+			return (await this.getRawFileChangesInfo()).filter(file => file.patch).map(file => {
+				const before = file.status === 'added' ? '/dev/null' : `a/${file.previous_filename ?? file.filename}`;
+				const after = file.status === 'removed' ? '/dev/null' : `b/${file.filename}`;
+				return `diff --git a/${file.previous_filename ?? file.filename} b/${file.filename}\n--- ${before}\n+++ ${after}\n${file.patch}\n`;
+			}).join('');
+		}
 		const githubRepository = this.githubRepository;
 		const { octokit, remote } = await githubRepository.ensure();
 
@@ -2184,6 +2476,23 @@ export class PullRequestModel extends IssueModel<PullRequest> implements IPullRe
 	 */
 	public async getRawFileChangesInfo(): Promise<IRawFileChange[]> {
 		Logger.debug(`Fetch file changes, base, head and merge base of PR #${this.number} - enter`, PullRequestModel.ID);
+		const provider = this.githubRepository.provider;
+		if (provider) {
+			let revision = await provider.revision(this.number);
+			if (this.head?.sha !== revision.source) {
+				// The source moved since the model loaded; refresh so the displayed head matches the computed diff.
+				await this.refreshProviderSnapshot();
+				revision = await provider.revision(this.number);
+				if (this.head?.sha !== revision.source) {
+					throw new Error(vscode.l10n.t('The pull request changed while its files were loading. Refresh and try again.'));
+				}
+			}
+			const files = await provider.rawChanges(this.number, revision);
+			this.mergeBase = revision.mergeBase;
+			this.hasChangesSinceLastReview = false;
+			this._rawFileChangesCache = files;
+			return files;
+		}
 
 		const githubRepository = this.githubRepository;
 		const { octokit, remote } = await githubRepository.ensure();
@@ -2263,6 +2572,14 @@ export class PullRequestModel extends IssueModel<PullRequest> implements IPullRe
 	 * Get the current mergeability of the pull request.
 	 */
 	async getMergeability(): Promise<PullRequestMergeabilityResult> {
+		if (this.githubRepository.provider) {
+			const mergeability = await this.githubRepository.provider.mergeability(this.number);
+			if (this.item.mergeable !== mergeability) {
+				this.item.mergeable = mergeability;
+				this._onDidChange.fire({ mergeability: true });
+			}
+			return { mergeability };
+		}
 		try {
 			Logger.debug(`Fetch pull request mergeability ${this.number} - enter`, PullRequestModel.ID);
 			const { query, remote, schema } = await this.githubRepository.ensure();
@@ -2312,6 +2629,12 @@ export class PullRequestModel extends IssueModel<PullRequest> implements IPullRe
 	 * Set a draft pull request as ready to be reviewed.
 	 */
 	async setReadyForReview(): Promise<ReadyForReview> {
+		const provider = this.githubRepository.provider;
+		if (provider) {
+			const item = await provider.setDraft(this.number, false);
+			this.applyProviderPullRequest(item);
+			return { isDraft: item.isDraft ?? false, mergeable: item.mergeable ?? PullRequestMergeability.Unknown, allowAutoMerge: !!item.allowAutoMerge };
+		}
 		try {
 			const { mutate, schema } = await this.githubRepository.ensure();
 
@@ -2327,7 +2650,7 @@ export class PullRequestModel extends IssueModel<PullRequest> implements IPullRe
 			/* __GDPR__
 				"pr.readyForReview.success" : {}
 			*/
-			this._telemetry.sendTelemetryEvent('pr.readyForReview.success');
+			this._telemetry.sendTelemetryEvent('azdo.pr.readyForReview.success');
 
 			const result: ReadyForReview = {
 				isDraft: data!.markPullRequestReadyForReview.pullRequest.isDraft,
@@ -2343,7 +2666,7 @@ export class PullRequestModel extends IssueModel<PullRequest> implements IPullRe
 			/* __GDPR__
 				"pr.readyForReview.failure" : {}
 			*/
-			this._telemetry.sendTelemetryErrorEvent('pr.readyForReview.failure');
+			this._telemetry.sendTelemetryErrorEvent('azdo.pr.readyForReview.failure');
 			throw e;
 		}
 	}
@@ -2352,6 +2675,12 @@ export class PullRequestModel extends IssueModel<PullRequest> implements IPullRe
 	 * Convert a pull request to draft.
 	 */
 	async convertToDraft(): Promise<ConvertToDraft> {
+		const provider = this.githubRepository.provider;
+		if (provider) {
+			const item = await provider.setDraft(this.number, true);
+			this.applyProviderPullRequest(item);
+			return { isDraft: item.isDraft ?? true, mergeable: item.mergeable ?? PullRequestMergeability.Unknown };
+		}
 		try {
 			const { mutate, schema } = await this.githubRepository.ensure();
 
@@ -2400,6 +2729,9 @@ export class PullRequestModel extends IssueModel<PullRequest> implements IPullRe
 	}
 
 	async addCommentReaction(graphNodeId: string, reaction: vscode.CommentReaction): Promise<AddReactionResponse | undefined> {
+		if (this.githubRepository.provider) {
+			throw new ProviderUnsupportedError('Comment reactions');
+		}
 		const reactionEmojiToContent = getReactionGroup().reduce((prev, curr) => {
 			prev[curr.label] = curr.title;
 			return prev;
@@ -2464,6 +2796,12 @@ export class PullRequestModel extends IssueModel<PullRequest> implements IPullRe
 	}
 
 	async resolveReviewThread(threadId: string): Promise<void> {
+		const provider = this.githubRepository.provider;
+		if (provider) {
+			await provider.resolveThread(this.number, threadId, true);
+			await this.refreshProviderSnapshot();
+			return;
+		}
 		const oldThread = this._reviewThreadsCache?.find(thread => thread.id === threadId);
 
 		try {
@@ -2507,6 +2845,12 @@ export class PullRequestModel extends IssueModel<PullRequest> implements IPullRe
 	}
 
 	async unresolveReviewThread(threadId: string): Promise<void> {
+		const provider = this.githubRepository.provider;
+		if (provider) {
+			await provider.resolveThread(this.number, threadId, false);
+			await this.refreshProviderSnapshot();
+			return;
+		}
 		const oldThread = this._reviewThreadsCache?.find(thread => thread.id === threadId);
 
 		try {
@@ -2550,6 +2894,14 @@ export class PullRequestModel extends IssueModel<PullRequest> implements IPullRe
 	}
 
 	async enableAutoMerge(mergeMethod: MergeMethod): Promise<void> {
+		const provider = this.githubRepository.provider;
+		if (provider) {
+			if (!this.head?.sha) {
+				throw new Error(vscode.l10n.t('The pull request source commit is unknown. Refresh before enabling auto-complete.'));
+			}
+			this.applyProviderPullRequest(await provider.setAutoMerge(this.number, mergeMethod, this.head.sha, false));
+			return;
+		}
 		try {
 			const { mutate, schema } = await this.githubRepository.ensure();
 			const { data } = await mutate({
@@ -2577,6 +2929,14 @@ export class PullRequestModel extends IssueModel<PullRequest> implements IPullRe
 	}
 
 	async disableAutoMerge(): Promise<void> {
+		const provider = this.githubRepository.provider;
+		if (provider) {
+			if (!this.head?.sha) {
+				throw new Error(vscode.l10n.t('The pull request source commit is unknown. Refresh before cancelling auto-complete.'));
+			}
+			this.applyProviderPullRequest(await provider.setAutoMerge(this.number, undefined, this.head.sha, false));
+			return;
+		}
 		try {
 			const { mutate, schema } = await this.githubRepository.ensure();
 			const { data } = await mutate({
@@ -2651,6 +3011,20 @@ export class PullRequestModel extends IssueModel<PullRequest> implements IPullRe
 	}
 
 	async initializePullRequestFileViewState(): Promise<void> {
+		const provider = this.githubRepository.provider;
+		if (provider) {
+			const changed: { fileName: string, viewed: ViewedState }[] = [];
+			for (const [path, viewed] of Object.entries(await provider.viewedFiles(this.number))) {
+				if (this._fileChangeViewedState[path] !== viewed) {
+					changed.push({ fileName: path, viewed });
+				}
+				this.setFileViewedState(path, viewed, false);
+			}
+			if (changed.length) {
+				this._onDidChangeFileViewedState.fire({ changed });
+			}
+			return;
+		}
 		const { query, schema, remote } = await this.githubRepository.ensure();
 
 		const changed: { fileName: string, viewed: ViewedState }[] = [];
@@ -2713,6 +3087,22 @@ export class PullRequestModel extends IssueModel<PullRequest> implements IPullRe
 					? f.substring(this.githubRepository.rootUri.path.length + 1)
 					: f
 			);
+
+		const provider = this.githubRepository.provider;
+		if (provider) {
+			this.updateMarkFilesInProgressRefCount(allFilenames, 'increment');
+			let saved = false;
+			try {
+				await provider.setViewed(this.number, allFilenames, state === 'viewed');
+				saved = true;
+			} finally {
+				const completed = this.updateMarkFilesInProgressRefCount(allFilenames, 'decrement');
+				if (saved) {
+					completed.forEach(path => this.setFileViewedState(path, state === 'viewed' ? ViewedState.VIEWED : ViewedState.UNVIEWED, event));
+				}
+			}
+			return;
+		}
 
 		this.updateMarkFilesInProgressRefCount(allFilenames, 'increment');
 

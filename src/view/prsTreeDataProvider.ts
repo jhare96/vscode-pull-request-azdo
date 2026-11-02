@@ -59,12 +59,12 @@ function enterpriseSettingsMessage(text: string | undefined, actions: { github: 
 		return undefined;
 	}
 	const message = new vscode.MarkdownString(escapeMarkdownText(text));
-	message.isTrusted = { enabledCommands: ['pr.signinNoEnterprise', 'pr.selectEnterpriseAccount', 'workbench.action.openSettings'] };
+	message.isTrusted = { enabledCommands: ['azdo.pr.signinNoEnterprise', 'azdo.pr.selectEnterpriseAccount', 'workbench.action.openSettings'] };
 	if (actions.githubEnterprise) {
-		message.appendMarkdown(`\n\n[${vscode.l10n.t('Select Account')}](command:pr.selectEnterpriseAccount)`);
+		message.appendMarkdown(`\n\n[${vscode.l10n.t('Select Account')}](command:azdo.pr.selectEnterpriseAccount)`);
 	}
 	if (actions.github) {
-		message.appendMarkdown(`\n[${vscode.l10n.t('Sign in with GitHub.com')}](command:pr.signinNoEnterprise)`);
+		message.appendMarkdown(`\n[${vscode.l10n.t('Sign in with GitHub.com')}](command:azdo.pr.signinNoEnterprise)`);
 	}
 	if (actions.configure) {
 		const settingsQuery = encodeURIComponent(JSON.stringify([`${GITHUB_ENTERPRISE}.${URIS}`]));
@@ -119,22 +119,22 @@ export class PullRequestsTreeDataProvider extends Disposable implements vscode.T
 				this.refreshAllQueryResults(true);
 			}
 		}));
-		this._register(vscode.commands.registerCommand('pr.refreshList', _ => {
+		this._register(vscode.commands.registerCommand('azdo.pr.refreshList', _ => {
 			this.prsTreeModel.forceClearCache();
 		}));
 
-		this._register(vscode.commands.registerCommand('pr.loadMore', (node: CategoryTreeNode) => {
+		this._register(vscode.commands.registerCommand('azdo.pr.loadMore', (node: CategoryTreeNode) => {
 			node.fetchNextPage = true;
 			this.refresh(node);
 		}));
 
-		this._view = this._register(vscode.window.createTreeView('pr:github', {
+		this._view = this._register(vscode.window.createTreeView('pr:azureDevOps', {
 			treeDataProvider: this,
 			showCollapseAll: true,
 			canSelectMany: areStacksEnabled(),
 			manageCheckboxStateManually: true
 		}));
-		this._loginView = this._register(vscode.window.createTreeView('github:login', {
+		this._loginView = this._register(vscode.window.createTreeView('azureDevOps:login', {
 			treeDataProvider: {
 				onDidChangeTreeData: this.onDidChangeTreeData,
 				getTreeItem: element => element.getTreeItem(),
@@ -153,7 +153,7 @@ export class PullRequestsTreeDataProvider extends Disposable implements vscode.T
 			}
 		}));
 		this._register({ dispose: () => { void commands.setContext(contexts.CAN_ADD_TO_STACK, false); } });
-		this._register(vscode.commands.registerCommand('pr.addToStack',
+		this._register(vscode.commands.registerCommand('azdo.pr.addToStack',
 			(clicked: PRNode, selected: TreeNode[]) => this.addSelectedPullRequestsToStack(clicked, selected)));
 
 		this._register(this._view.onDidChangeVisibility(e => {
@@ -194,7 +194,7 @@ export class PullRequestsTreeDataProvider extends Disposable implements vscode.T
 
 		this._children = [];
 
-		this._register(vscode.commands.registerCommand('pr.configurePRViewlet', async () => {
+		this._register(vscode.commands.registerCommand('azdo.pr.configurePRViewlet', async () => {
 			const configuration = await vscode.window.showQuickPick([
 				'Configure Remotes...',
 				'Configure Queries...',
@@ -458,6 +458,7 @@ export class PullRequestsTreeDataProvider extends Disposable implements vscode.T
 
 		this._initialized = true;
 		this._register(this._reposManager.onDidChangeState(() => {
+			void commands.setContext(contexts.LOADING_PRS_TREE, this._reposManager.state === ReposManagerState.Initializing);
 			this.refreshAll();
 		}));
 		this._register(this._reposManager.onDidLoadAnyRepositories(() => {
@@ -681,6 +682,11 @@ export class PullRequestsTreeDataProvider extends Disposable implements vscode.T
 	}
 
 	private updateEnterpriseAuthenticationMessage(remotes: readonly Remote[] = this._reposManager.activeGitHubRemotes): void {
+		if (this._reposManager.credentialStore.azure) {
+			this._view.message = undefined;
+			this._loginView.message = undefined;
+			return;
+		}
 		const selected = this._reposManager.credentialStore.getHub(AuthProvider.githubEnterprise)?.serverUri;
 		const showPublicSignIn = remotes.some(remote => remote.authProviderId === AuthProvider.github)
 			&& !this._reposManager.credentialStore.isAuthenticated(AuthProvider.github);
@@ -701,14 +707,16 @@ export class PullRequestsTreeDataProvider extends Disposable implements vscode.T
 	}
 
 	async getChildren(element?: TreeNode): Promise<TreeNode[]> {
+		const initializing = this._reposManager.state === ReposManagerState.Initializing
+			&& this._reposManager.folderManagers.length > 0;
+		await commands.setContext(contexts.LOADING_PRS_TREE, initializing);
 		if (!this._reposManager?.folderManagers.length) {
 			this._view.message = undefined;
 			this._loginView.message = undefined;
 			return [];
 		}
 
-		if (this._reposManager.state === ReposManagerState.Initializing) {
-			commands.setContext(contexts.LOADING_PRS_TREE, true);
+		if (initializing) {
 			return [];
 		}
 

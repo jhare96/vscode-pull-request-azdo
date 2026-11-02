@@ -1,108 +1,218 @@
-[![Build Status](https://dev.azure.com/vscode/vscode-pull-request-github/_apis/build/status/vscode-pull-request-github%20%28pr%29?branchName=main)](https://dev.azure.com/vscode/vscode-pull-request-github/_build?definitionId=44&branchName=main)
+# Azure DevOps Pull Requests
 
-> Review and manage your GitHub pull requests and issues directly in VS Code
+Review and manage Azure DevOps pull requests in VS Code: browse pull requests, inspect
+diffs, leave comments, submit reviews, create pull requests, and complete changes.
 
-This extension allows you to review and manage GitHub pull requests and issues in Visual Studio Code. The support includes:
+**Unofficial community-maintained extension.** This project is not affiliated with,
+endorsed by, or supported by Microsoft or GitHub. Support is best-effort, with no
+guaranteed response time.
 
-- Authenticating and connecting VS Code to GitHub and GitHub Enterprise.
-- Listing and browsing PRs from within VS Code.
-- Reviewing PRs from within VS Code with in-editor commenting.
-- Validating PRs from within VS Code with easy checkouts.
-- Terminal integration that enables UI and CLIs to co-exist.
-- Listing and browsing issues from within VS Code.
-- Hover cards for "@" mentioned users and for issues.
-- Completion suggestions for users and issues.
-- A "Start working on issue" action which can create a branch for you.
-- Code actions to create issues from "todo" comments.
+## Install locally
 
-![PR Demo](.readme/demo.gif)
+### Prerequisites
 
-![Issue Demo](.readme/issueDemo.gif)
+- Git.
+- Node.js 24 LTS and npm for building and packaging.
+- VS Code 1.141.0 or later, compatible with the extension's proposed APIs. Use a
+  compatible VS Code Insiders build if your stable build does not allow those APIs.
+- The `code` command on your PATH, or `code-insiders` if using Insiders. On macOS,
+  run **Shell Command: Install 'code' command in PATH** from the Command Palette.
 
-# Getting Started
+The extension currently uses proposed VS Code APIs, so installing the VSIX alone is
+not sufficient: explicitly enable those APIs as described below.
 
-It's easy to get started with GitHub Pull Requests for Visual Studio Code. Simply follow these steps to get started.
+### Build a VSIX
 
-1. Install the extension from within VS Code or download it from [the marketplace](https://aka.ms/vscodepr-download).
-1. Open your desired GitHub repository in VS Code.
-1. A new viewlet will appear on the activity bar which shows a list of pull requests and issues.
-1. Use the button on the viewlet to sign in to GitHub.
-1. You may need to configure the `githubPullRequests.remotes` setting, by default the extension will look for PRs for `origin` and `upstream`. If you have different remotes, add them to the remotes list.
-1. You should be good to go!
+Clone this repository and install its locked dependencies:
 
-Check out https://www.youtube.com/watch?v=LdSwWxVzUpo for additional getting started tips!
+```sh
+git clone https://github.com/jhare96/vscode-pull-request-azdo.git
+cd vscode-pull-request-azdo
+npm ci
+```
 
-# Configuring the extension
+Package the extension:
 
-There are several settings that can be used to configure the extension.
+```sh
+npm run package -- --out azure-devops-pull-requests.vsix
+```
 
-## GitHub Enterprise
+Packaging cleans stale build output, builds production bundles, and generates
+third-party licence notices. The VSIX is written to the repository root. Internet
+access is required to install dependencies and retrieve build and packaging tools.
 
-VS Code 1.141 or later is required. If you use Insiders, keep it updated to the latest build.
+### Install and enable proposed APIs
 
-Configure GHE.com and GitHub Enterprise Server instances using the built-in GitHub Authentication setting:
+Install the package:
+
+```sh
+code --install-extension ./azure-devops-pull-requests.vsix --force
+```
+
+Close all VS Code windows, then launch your Azure DevOps repository with the API
+permission enabled:
+
+```sh
+code --enable-proposed-api=jhare96.vscode-pull-request-azdo /path/to/your/repository
+```
+
+For Insiders, replace `code` with `code-insiders` in both commands.
+
+To keep the permission enabled across normal launches, run **Preferences: Configure
+Runtime Arguments** from the Command Palette and add the extension ID to the
+`enable-proposed-api` array in `argv.json`, preserving any existing entries:
 
 ```json
 {
-	"github-enterprise.uris": [
-		"https://company.ghe.com",
-		"https://github.example.com"
-	]
+  "enable-proposed-api": ["jhare96.vscode-pull-request-azdo"]
 }
 ```
 
-The list order does not select a default instance. An explicitly configured list takes precedence over the deprecated `github-enterprise.uri` setting, including an empty list (`[]`), which disables Enterprise instances. If the list is not configured, the legacy setting still applies. Workspace and folder instance settings only apply in trusted workspaces.
+Fully restart VS Code after changing runtime arguments. If VS Code reports that an
+API proposal is unavailable or not permitted, use a compatible Insiders build; the
+flag does not make unavailable APIs available.
 
-GitHub Pull Requests uses **one selected Enterprise account at a time**, alongside a separate GitHub.com account. When another instance is needed or no account is selected, use **Select Account** in the Pull Requests or Login view. This opens account preferences for this extension and GitHub Enterprise directly, or starts sign-in if you have no Enterprise accounts yet. You can also run **GitHub Pull Requests: Select GitHub Enterprise Account...** or use **Accounts > Manage Extension Account Preferences...**. To add another instance, edit `github-enterprise.uris` in Settings; ordinary sign-in does not replace your existing list.
+To update your local installation, pull the latest changes, run `npm ci`, rebuild
+the VSIX, and repeat the install command with `--force`.
 
-Removing an instance from the list does not delete its saved sign-ins. GitHub.com accounts do not need either Enterprise setting.
+## Connect to Azure DevOps
 
-## Remotes and queries
+1. Open a folder whose Git remote is an Azure DevOps repository. Supported remote
+   formats include:
+   - `https://dev.azure.com/<org>/<project>/_git/<repo>`
+   - Legacy `*.visualstudio.com` URLs.
+   - `git@ssh.dev.azure.com:v3/<org>/<project>/<repo>`
+2. Open the **Azure DevOps** view and choose **Sign in**.
+   - **Azure DevOps Services:** use a Microsoft account or a personal access token.
+   - **Azure DevOps Server:** use a personal access token.
+   - PATs need **Code (read & write)** and **Project and Team (read)** permissions.
+     Work Items permissions are not required.
+3. For Azure DevOps Server, first add the collection URL to the user-level
+   `azureDevOpsPullRequests.serverCollections` setting, for example:
 
-As mentioned above, `githubPullRequests.remotes` is used to specify what remotes the extension should try to fetch pull requests from.
+   ```json
+   {
+     "azureDevOpsPullRequests.serverCollections": [
+       "https://devops.example.com/tfs/DefaultCollection"
+     ]
+   }
+   ```
 
-To customize the pull request tree, you can use the `githubPullRequests.queries` setting. This setting is a list of labels and search queries which populate the categories of the tree. By default, these queries are "Waiting For My Review", "Assigned To Me", and "Created By Me". An example of adding a "Mentioned Me" category is to change the setting to the following:
+   Workspace settings cannot grant this trust. Credentials are sent only to
+   explicitly trusted server collections; Azure DevOps Services organizations do
+   not require this setting.
 
+Git SSH authentication is separate from authentication for the pull request APIs.
+An SSH remote still requires Microsoft account or PAT sign-in for pull requests.
+If several organizations are open, sign-in prompts you to select one.
+
+PATs are stored in VS Code Secret Storage. If a Microsoft session cannot be renewed
+silently, choose **Sign in** again. **Azure DevOps Pull Requests: Sign out of Azure
+DevOps** removes the selected organization's saved PAT and prevents automatic session
+reuse until you sign in again; it does not sign your Microsoft account out of VS Code.
+
+## Features
+
+- **Pull request tree:** Local Pull Request Branches, Waiting For My Review, Created
+  By Me, and All Open, with paging.
+- **Overview:** edit the title and description, view Markdown, discussions,
+  reviewers, votes, labels, branch policies, and status checks. Change draft status,
+  retarget or abandon a pull request, and copy or open its link. Failed checks or
+  discussions show a section-level error with Retry.
+- **Changes and checkout:** inspect file diffs and commits, mark files as viewed,
+  check out branches, and return to the default branch with dirty-working-tree
+  safeguards. Viewed-file state is stored locally per source blob.
+- **Comments and reviews:** add, edit, or delete comments and replies, resolve or
+  reactivate discussions, and keep private review drafts locally until submission.
+  Approve maps to vote 10, Request Changes to -10, and comment-only submissions do
+  not change your vote. Submission is resumable without duplicate comments and is
+  blocked if the source changed since the review began.
+- **Creation:** choose branches, create drafts, select reviewers and labels, use
+  templates from `.azuredevops`, `.vsts`, `docs`, or the repository root, and
+  configure auto-complete.
+- **Completion:** merge, squash, or rebase against the reviewed source commit, or
+  enable auto-complete. Completion requires Azure to report that merging is possible
+  and blocking policies have passed. Remote source branches are deleted only if they
+  still point to the reviewed commit.
+
+### Custom pull request queries
+
+Configure categories in `azureDevOpsPullRequests.queries`. Supported qualifiers are
+`is:open|closed|merged`, `author:`, `review-requested:`, `base:`, `head:`, and the
+current repository's `repo:`. Variables include `${user}`, `${owner}`, and
+`${repository}`.
+
+```json
+{
+  "azureDevOpsPullRequests.queries": [
+    {
+      "label": "Waiting For My Review",
+      "query": "is:open review-requested:${user}"
+    },
+    {
+      "label": "Created By Me",
+      "query": "is:open author:${user}"
+    }
+  ]
+}
 ```
-"githubPullRequests.queries": [
-	{
-		"label": "Waiting For My Review",
-		"query": "is:open review-requested:${user}"
-	},
-	{
-		"label": "Assigned To Me",
-		"query": "is:open assignee:${user}"
-	},
-	{
-		"label": "Created By Me",
-		"query": "is:open author:${user}"
-	},
-	{
-		"label": "Mentioned Me",
-		"query": "is:open mentions:${user}"
-	}
-]
-```
 
-Similarly, there is a setting to configure your issues queries: `githubIssues.queries`.
+Unsupported qualifiers show an error on the category rather than an empty result.
 
-Queries use [GitHub search syntax](https://help.github.com/en/articles/understanding-the-search-syntax).
+## Limitations
 
-To view additional settings for the extension, you can open VS Code settings and search for "github pull requests".
+Work item browsing, linking, and automatic transitions on completion are not
+supported. Other unavailable features include notifications, coding agents,
+Codespaces, merge queues, pull request stacks, projects, milestones, assignees,
+file uploads, reactions, attestation commits, reverting merged pull requests, and
+creating pull requests from forks.
 
-# Issues
+## Development
 
-This extension is still in development, so please refer to our [issue tracker for known issues](https://github.com/Microsoft/vscode-pull-request-github/issues), and please contribute with additional information if you encounter an issue yourself.
+After running `npm ci`, open this repository in VS Code and select **Launch
+Extension** in Run and Debug, then press **F5**. The launch configuration builds the
+extension and enables its proposed APIs in an Extension Development Host. Open an
+Azure DevOps repository in that window to test it.
 
-## Questions? Authentication? GitHub Enterprise?
+- `npm run compile` builds desktop, browser, and webview bundles.
+- `npm run compile:test` type-checks and emits extension-host tests.
+- `npm run test:scripts` runs build-script tests after compiling tests.
+- `npm run test:webviews` runs webview tests.
+- `npm run check:commands`, `npm run lint`, and `npm run hygiene` validate command
+  contributions and repository conventions.
+- `npm run package` creates a production VSIX, including the MIT licence and
+  generated dependency notices. Dependencies are bundled rather than shipped as
+  `node_modules`.
 
-See our [wiki](https://github.com/Microsoft/vscode-pull-request-github/wiki) for our FAQ.
+## Privacy and security
 
-## Contributing
+This extension does not send usage or error telemetry to Microsoft, GitHub, or the
+maintainer.
 
-If you're interested in contributing, or want to explore the source code of this extension yourself, see our [contributing guide](https://github.com/Microsoft/vscode-pull-request-github/wiki/Contributing), which includes:
+Azure DevOps API requests send the data needed for the action you invoke, such as
+comments and review votes, to the selected organization or trusted server collection.
+Microsoft account sign-in is handled by VS Code's Microsoft authentication provider.
+PATs are stored in VS Code Secret Storage; private review drafts and viewed-file
+state are stored locally in extension storage. Diagnostic output is local; review
+logs before sharing them.
 
-- [How to Build and Run](https://github.com/Microsoft/vscode-pull-request-github/wiki/Contributing#build-and-run)
-- [Architecture](https://github.com/Microsoft/vscode-pull-request-github/wiki/Contributing#architecture)
-- [Making Pull Requests](https://github.com/Microsoft/vscode-pull-request-github/wiki/Contributing#pull-requests)
-- [Code of Conduct](https://github.com/Microsoft/vscode-pull-request-github/wiki/Contributing#code-of-conduct)
+VS Code, other extensions, and optional services you explicitly invoke have their
+own privacy policies and telemetry settings.
+
+A private vulnerability reporting channel is not yet configured. Read the
+[security reporting policy](./SECURITY.md) before reporting a vulnerability; do not
+post sensitive details publicly.
+
+## Support
+
+[Report bugs and request features in this repository](https://github.com/jhare96/vscode-pull-request-azdo/issues).
+Include the extension and VS Code versions, reproduction steps, and relevant
+diagnostic output with sensitive information removed.
+
+## Licence and attribution
+
+Released under the [MIT licence](./LICENSE). This project includes code from
+[Microsoft's GitHub Pull Requests and Issues extension](https://github.com/microsoft/vscode-pull-request-github);
+its copyright and licence notices are preserved. Independently authored additions
+use the `jhare96` MIT header. Bundled third-party components retain their own licences
+and notices, included in the VSIX.

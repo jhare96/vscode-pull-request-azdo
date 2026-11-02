@@ -31,6 +31,7 @@ export enum PRCategoryActionType {
 	NoRemotes,
 	NoMatchingRemotes,
 	ConfigureRemotes,
+	Failed,
 }
 
 export class PRCategoryActionNode extends TreeNode implements vscode.TreeItem {
@@ -38,8 +39,9 @@ export class PRCategoryActionNode extends TreeNode implements vscode.TreeItem {
 	public iconPath?: { light: vscode.Uri; dark: vscode.Uri };
 	public type: PRCategoryActionType;
 	public command?: vscode.Command;
+	public tooltip?: string;
 
-	constructor(parent: TreeNodeParent, type: PRCategoryActionType, node?: CategoryTreeNode) {
+	constructor(parent: TreeNodeParent, type: PRCategoryActionType, node?: CategoryTreeNode, failure?: string) {
 		super(parent);
 		this.type = type;
 		this.collapsibleState = vscode.TreeItemCollapsibleState.None;
@@ -51,7 +53,7 @@ export class PRCategoryActionNode extends TreeNode implements vscode.TreeItem {
 				this.label = vscode.l10n.t('Load more');
 				this.command = {
 					title: vscode.l10n.t('Load more'),
-					command: 'pr.loadMore',
+					command: 'azdo.pr.loadMore',
 					arguments: [node],
 				};
 				break;
@@ -59,7 +61,7 @@ export class PRCategoryActionNode extends TreeNode implements vscode.TreeItem {
 				this.label = vscode.l10n.t('Continue fetching from other remotes');
 				this.command = {
 					title: vscode.l10n.t('Load more'),
-					command: 'pr.loadMore',
+					command: 'azdo.pr.loadMore',
 					arguments: [node],
 				};
 				break;
@@ -67,7 +69,7 @@ export class PRCategoryActionNode extends TreeNode implements vscode.TreeItem {
 				this.label = vscode.l10n.t('Sign in');
 				this.command = {
 					title: vscode.l10n.t('Sign in'),
-					command: 'pr.signinAndRefreshList',
+					command: 'azdo.pr.signinAndRefreshList',
 					arguments: [],
 				};
 				break;
@@ -75,12 +77,12 @@ export class PRCategoryActionNode extends TreeNode implements vscode.TreeItem {
 				this.label = vscode.l10n.t('Sign in with GitHub Enterprise...');
 				this.command = {
 					title: vscode.l10n.t('Sign in'),
-					command: 'pr.signinenterprise',
+					command: 'azdo.pr.signinenterprise',
 					arguments: [],
 				};
 				break;
 			case PRCategoryActionType.NoRemotes:
-				this.label = vscode.l10n.t('No GitHub repositories found.');
+				this.label = vscode.l10n.t('No Azure DevOps repositories found.');
 				break;
 			case PRCategoryActionType.NoMatchingRemotes:
 				this.label = vscode.l10n.t('No remotes match the current setting.');
@@ -89,7 +91,16 @@ export class PRCategoryActionNode extends TreeNode implements vscode.TreeItem {
 				this.label = vscode.l10n.t('Configure remotes...');
 				this.command = {
 					title: vscode.l10n.t('Configure remotes'),
-					command: 'pr.configureRemotes',
+					command: 'azdo.pr.configureRemotes',
+					arguments: [],
+				};
+				break;
+			case PRCategoryActionType.Failed:
+				this.label = vscode.l10n.t('Unable to load pull requests. Click to retry.');
+				this.tooltip = failure;
+				this.command = {
+					title: vscode.l10n.t('Retry'),
+					command: 'azdo.pr.refreshList',
 					arguments: [],
 				};
 				break;
@@ -270,6 +281,7 @@ export class CategoryTreeNode extends TreeNode implements vscode.TreeItem {
 		let hasMorePages = false;
 		let hasUnsearchedRepositories = false;
 		let needLogin = false;
+		let failure: string | undefined;
 		const fetchNextPage = this.fetchNextPage;
 		this.fetchNextPage = false;
 		if (this.type === PRType.LocalPullRequest) {
@@ -279,6 +291,7 @@ export class CategoryTreeNode extends TreeNode implements vscode.TreeItem {
 			} catch (e) {
 				vscode.window.showErrorMessage(vscode.l10n.t('Fetching local pull requests failed: {0}', formatError(e)));
 				needLogin = e instanceof AuthenticationError;
+				failure = needLogin ? undefined : formatError(e);
 			}
 		} else {
 			try {
@@ -323,6 +336,7 @@ export class CategoryTreeNode extends TreeNode implements vscode.TreeItem {
 						}
 					});
 					needLogin = e instanceof AuthenticationError;
+					failure = needLogin ? undefined : error;
 				}
 			}
 		}
@@ -340,8 +354,8 @@ export class CategoryTreeNode extends TreeNode implements vscode.TreeItem {
 			this._children = nodes;
 			return nodes;
 		} else {
-			const category = needLogin ? PRCategoryActionType.Login : PRCategoryActionType.Empty;
-			const result = [new PRCategoryActionNode(this, category)];
+			const category = needLogin ? PRCategoryActionType.Login : failure ? PRCategoryActionType.Failed : PRCategoryActionType.Empty;
+			const result = [new PRCategoryActionNode(this, category, undefined, failure)];
 
 			this._children = result;
 			return result;

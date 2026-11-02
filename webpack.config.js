@@ -17,6 +17,7 @@ const ForkTsCheckerPlugin = require('fork-ts-checker-webpack-plugin');
 const JSON5 = require('json5');
 const TerserPlugin = require('terser-webpack-plugin');
 const webpack = require('webpack');
+const { ThirdPartyNoticesPlugin } = require('./build/thirdPartyNotices');
 
 async function resolveTSConfig(configFile) {
 	const data = await new Promise((resolve, reject) => {
@@ -53,6 +54,7 @@ async function getWebviewConfig(mode, env, entry) {
 	 * @type WebpackConfig['plugins'] | any
 	 */
 	const plugins = [
+		new ThirdPartyNoticesPlugin(),
 		new webpack.optimize.LimitChunkCountPlugin({
 			maxChunks: 1
 		}),
@@ -136,6 +138,16 @@ async function getWebviewConfig(mode, env, entry) {
 					test: /\.ttf$/,
 					type: 'asset/resource'
 				},
+				{
+					// The small MDL2 icon font is inlined; the large Fluent fonts are emitted and only fetched if used.
+					test: /\.woff$/,
+					type: 'asset/inline'
+				},
+				{
+					test: /\.woff2$/,
+					type: 'asset/resource',
+					generator: { filename: 'fonts/[name][ext]' }
+				},
 			],
 		},
 		resolve: {
@@ -172,7 +184,8 @@ async function getExtensionConfig(target, mode, env) {
 				configFile: path.join(__dirname, target === 'webworker' ? 'tsconfig.browser.json' : 'tsconfig.json'),
 			},
 		}),
-		new webpack.ContextReplacementPlugin(/mocha/, /^$/)
+		new webpack.ContextReplacementPlugin(/mocha/, /^$/),
+		new ThirdPartyNoticesPlugin(),
 	];
 
 	// Add fixtures copying plugin for node target (which has individual test files)
@@ -427,6 +440,7 @@ module.exports =
 			getExtensionConfig('webworker', mode, env),
 			getWebviewConfig(mode, env, {
 				'webview-pr-description': './webviews/editorWebview/index.ts',
+				'webview-azdo-pr': './webviews/azdoOverview/index.tsx',
 				'webview-open-pr-view': './webviews/activityBarView/index.ts',
 				'webview-create-pr-view-new': './webviews/createPullRequestViewNew/index.ts',
 			}),

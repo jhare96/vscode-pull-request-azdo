@@ -5,6 +5,7 @@
 
 import * as vscode from 'vscode';
 import { AuthProvider, GitHubServerType } from './authentication';
+import { resolveGitUrlAlias } from './gitUrl';
 import Logger from './logger';
 import { Protocol, ProtocolType } from './protocol';
 import { Repository } from '../api/api';
@@ -22,6 +23,9 @@ export class Remote {
 	}
 
 	public get normalizedHost(): string {
+		if (this.gitProtocol.azureRemote) {
+			return this.gitProtocol.azureRemote.organizationUrl;
+		}
 		if (this.gitProtocol.type === ProtocolType.HTTP) {
 			const uri = this.gitProtocol.url;
 			const path = uri.path.replace(/\/$/, '');
@@ -33,6 +37,9 @@ export class Remote {
 	}
 
 	public get authProviderId(): AuthProvider {
+		if (this.gitProtocol.azureRemote) {
+			return AuthProvider.azureDevOps;
+		}
 		return ['github.com', 'ssh.github.com'].includes(this.host.toLowerCase()) ? AuthProvider.github : AuthProvider.githubEnterprise;
 	}
 
@@ -48,6 +55,9 @@ export class Remote {
 
 	public matchesServerUri(serverUri: vscode.Uri): boolean {
 		const server = new URL(serverUri.toString());
+		if (this.gitProtocol.azureRemote) {
+			return this.normalizedHost.toLowerCase() === server.href.replace(/\/$/, '').toLowerCase();
+		}
 		if (server.hostname.toLowerCase() === 'github.com') {
 			return ['github.com', 'ssh.github.com'].includes(this.host.toLowerCase());
 		}
@@ -62,6 +72,9 @@ export class Remote {
 	equals(remote: Remote): boolean {
 		if (this.remoteName !== remote.remoteName) {
 			return false;
+		}
+		if (this.gitProtocol.azureRemote || remote.gitProtocol.azureRemote) {
+			return !!this.gitProtocol.azureRemote && !!remote.gitProtocol.azureRemote && this.gitProtocol.equals(remote.gitProtocol);
 		}
 		if (!this.host.includes(remote.host) && !remote.host.includes(this.host)) {
 			return false;
@@ -111,29 +124,10 @@ async function resolveGitUrl(url: string, repository: Repository): Promise<strin
 		// Get all git config entries
 		const configs = await repository.getConfigs();
 
-		// Find all url.*.insteadOf entries
-		const urlSubstitutions: { prefix: string; replacement: string }[] = [];
-
-		for (const config of configs) {
-			// Match patterns like "url.https://github.com/.insteadOf" or "url.git@github.com:.insteadOf"
-			const match = config.key.match(/^url\.(.+)\.insteadof$/i);
-			if (match) {
-				const replacement = match[1];
-				const prefix = config.value;
-				urlSubstitutions.push({ prefix, replacement });
-			}
-		}
-
-		// Sort by prefix length (longest first) to handle overlapping prefixes correctly
-		urlSubstitutions.sort((a, b) => b.prefix.length - a.prefix.length);
-
-		// Apply the first matching substitution
-		for (const { prefix, replacement } of urlSubstitutions) {
-			if (url.startsWith(prefix)) {
-				const resolvedUrl = replacement + url.substring(prefix.length);
-				Logger.appendLine(`Resolved git URL alias: "${url}" -> "${resolvedUrl}"`, 'Remote');
-				return resolvedUrl;
-			}
+		const resolvedUrl = resolveGitUrlAlias(url, configs);
+		if (resolvedUrl !== url) {
+			Logger.appendLine('Resolved a Git URL alias.', 'Remote');
+			return resolvedUrl;
 		}
 	} catch (error) {
 		Logger.error(`Failed to resolve git URL aliases for "${url}": ${error}`, 'Remote');
@@ -203,6 +197,9 @@ export class GitHubRemote extends Remote {
 	}
 
 	public override get authProviderId(): AuthProvider {
+		if (this.githubServerType === GitHubServerType.AzureDevOps) {
+			return AuthProvider.azureDevOps;
+		}
 		if (this.githubServerType === GitHubServerType.Enterprise) {
 			return AuthProvider.githubEnterprise;
 		}

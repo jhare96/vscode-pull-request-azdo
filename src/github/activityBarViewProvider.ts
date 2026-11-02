@@ -13,20 +13,20 @@ import { getDefaultMergeMethod } from './pullRequestOverview';
 import { PullRequestReviewCommon, ReviewContext } from './pullRequestReviewCommon';
 import { isInCodespaces, parseReviewers } from './utils';
 import { MergeArguments, PullRequest, ReviewType, SubmitReviewArgs } from './views';
-import { IComment } from '../common/comment';
+import { CloseResult } from '../../common/views';
 import { emojify, ensureEmojis } from '../common/emoji';
 import { disposeAll } from '../common/lifecycle';
 import Logger from '../common/logger';
 import { CHECKOUT_DEFAULT_BRANCH, CHECKOUT_PULL_REQUEST_BASE_BRANCH, EXPERIMENTAL_STACKS, POST_DONE, PR_SETTINGS_NAMESPACE } from '../common/settingKeys';
 import { areStacksEnabled } from '../common/settingsUtils';
-import { ReviewEvent, TimelineEvent } from '../common/timelineEvent';
+import { EventType, ReviewEvent, TimelineEvent } from '../common/timelineEvent';
 import { formatError } from '../common/utils';
 import { generateUuid } from '../common/uuid';
 import { IRequestMessage, WebviewViewBase } from '../common/webview';
 import { ReviewManager } from '../view/reviewManager';
 
 export class PullRequestViewProvider extends WebviewViewBase implements vscode.WebviewViewProvider {
-	public override readonly viewType = 'github:activePullRequest';
+	public override readonly viewType = 'azureDevOps:activePullRequest';
 	private _existingReviewers: ReviewState[] = [];
 	private _updatingPromise: Promise<unknown> | undefined;
 	private _stackUpdateSequence = 0;
@@ -44,19 +44,19 @@ export class PullRequestViewProvider extends WebviewViewBase implements vscode.W
 			}
 		}));
 
-		this._register(vscode.commands.registerCommand('pr.readyForReview', async () => {
+		this._register(vscode.commands.registerCommand('azdo.pr.readyForReview', async () => {
 			return this.readyForReviewCommand();
 		}));
-		this._register(vscode.commands.registerCommand('pr.readyForReviewAndMerge', async (context: { mergeMethod: MergeMethod }) => {
+		this._register(vscode.commands.registerCommand('azdo.pr.readyForReviewAndMerge', async (context: { mergeMethod: MergeMethod }) => {
 			return this.readyForReviewAndMergeCommand(context);
 		}));
-		this._register(vscode.commands.registerCommand('review.approve', (e: SubmitReviewArgs) => this.approvePullRequestCommand(e)));
-		this._register(vscode.commands.registerCommand('review.comment', (e: { body: string }) => this.submitReviewCommand(e)));
-		this._register(vscode.commands.registerCommand('review.requestChanges', (e: { body: string }) => this.requestChangesCommand(e)));
-		this._register(vscode.commands.registerCommand('review.approveOnDotCom', () => {
+		this._register(vscode.commands.registerCommand('azdo.review.approve', (e: SubmitReviewArgs) => this.approvePullRequestCommand(e)));
+		this._register(vscode.commands.registerCommand('azdo.review.comment', (e: { body: string }) => this.submitReviewCommand(e)));
+		this._register(vscode.commands.registerCommand('azdo.review.requestChanges', (e: { body: string }) => this.requestChangesCommand(e)));
+		this._register(vscode.commands.registerCommand('azdo.review.approveOnDotCom', () => {
 			return openItemOnGitHub(this._item, this._folderRepositoryManager.telemetry);
 		}));
-		this._register(vscode.commands.registerCommand('review.requestChangesOnDotCom', () => {
+		this._register(vscode.commands.registerCommand('azdo.review.requestChangesOnDotCom', () => {
 			return openItemOnGitHub(this._item, this._folderRepositoryManager.telemetry);
 		}));
 	}
@@ -94,15 +94,15 @@ export class PullRequestViewProvider extends WebviewViewBase implements vscode.W
 				return this.close(message);
 			case 'pr.comment':
 				return this.createComment(message);
-			case 'pr.merge':
+			case 'azdo.pr.merge':
 				return this.mergePullRequest(message);
-			case 'pr.merge-stack':
+			case 'azdo.pr.merge-stack':
 				return PullRequestReviewCommon.mergeStack(this.getReviewContext(), message);
 			case 'pr.open-create':
 				return this.create();
 			case 'pr.deleteBranch':
 				return this.deleteBranch(message);
-			case 'pr.readyForReview':
+			case 'azdo.pr.readyForReview':
 				return this.setReadyForReview(message);
 			case 'pr.approve':
 				return this.approvePullRequestMessage(message);
@@ -137,7 +137,7 @@ export class PullRequestViewProvider extends WebviewViewBase implements vscode.W
 	}
 
 	public async refresh(): Promise<void> {
-		return vscode.window.withProgress({ location: { viewId: 'github:activePullRequest' } }, async () => {
+		return vscode.window.withProgress({ location: { viewId: 'azureDevOps:activePullRequest' } }, async () => {
 			await this._item.initializeReviewThreadCache();
 			await this.updatePullRequest(this._item);
 		});
@@ -253,7 +253,11 @@ export class PullRequestViewProvider extends WebviewViewBase implements vscode.W
 					pullRequestModel.number,
 				),
 				this._folderRepositoryManager.getPullRequestRepositoryAccessAndMergeMethods(pullRequestModel),
-				pullRequestModel.getTimelineEvents(),
+				pullRequestModel.getTimelineEvents().catch(error => {
+					// The active pull request view does not render the timeline; reviewers still come from review requests.
+					Logger.warn(`Unable to load discussions for the active pull request view: ${formatError(error)}`, 'ActivePullRequestView');
+					return [];
+				}),
 				pullRequestModel.getReviewRequests(),
 				this._folderRepositoryManager.getBranchNameForPullRequest(pullRequestModel),
 				this._folderRepositoryManager.getPullRequestRepositoryDefaultBranch(pullRequestModel),
@@ -367,7 +371,8 @@ export class PullRequestViewProvider extends WebviewViewBase implements vscode.W
 				hasReviewDraft,
 				currentUserReviewState: reviewState,
 				isCopilotOnMyBehalf: await isCopilotOnMyBehalf(pullRequest, currentUser, coAuthors),
-				attestationCommitsEnabled: isAttestationCommitsEnabled()
+				attestationCommitsEnabled: isAttestationCommitsEnabled(),
+				checksError: pullRequest.providerSnapshot?.checks.state === 'error' ? pullRequest.providerSnapshot.checks.message : null,
 			};
 
 			this._postMessage({
@@ -381,14 +386,20 @@ export class PullRequestViewProvider extends WebviewViewBase implements vscode.W
 		}
 	}
 
-	private close(message: IRequestMessage<string>): void {
-		vscode.commands.executeCommand<IComment>('pr.close', this._item, message.args).then(comment => {
-			if (comment) {
-				this._replyMessage(message, {
-					value: comment,
-				});
-			}
-		});
+	private async close(message: IRequestMessage<string>): Promise<void> {
+		try {
+			const comment = message.args ? await this._item.createIssueComment(message.args) : undefined;
+			const closeUpdate = await this._item.close();
+			const result: CloseResult = {
+				state: closeUpdate.item.state.toUpperCase() as GithubItemStateEnum,
+				commentEvent: comment ? { ...comment, event: EventType.Commented } : undefined,
+				closeEvent: closeUpdate.closedEvent,
+			};
+			this._replyMessage(message, result);
+		} catch (error) {
+			vscode.window.showErrorMessage(vscode.l10n.t('Closing the pull request failed: {0}', formatError(error)));
+			this._throwError(message, formatError(error));
+		}
 	}
 
 	private create() {
@@ -566,7 +577,7 @@ export class PullRequestViewProvider extends WebviewViewBase implements vscode.W
 <html lang="en">
 	<head>
 		<meta charset="UTF-8">
-		<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src vscode-resource: https:; script-src 'nonce-${nonce}'; style-src vscode-resource: 'unsafe-inline' http: https: data:;">
+		<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src vscode-resource: https: data:; script-src 'nonce-${nonce}'; style-src vscode-resource: 'unsafe-inline' http: https: data:;">
 		<meta name="viewport" content="width=device-width, initial-scale=1.0">
 
 		<title>Active Pull Request</title>

@@ -46,6 +46,7 @@ import {
 	IAccount,
 	IMilestone,
 	IProject,
+	isITeam,
 	Issue,
 	ITeam,
 	MergeMethod,
@@ -90,8 +91,9 @@ import { GitHubRemote, parseRemote } from '../common/remote';
 
 import { BRANCH_LIST_TIMEOUT, PR_SETTINGS_NAMESPACE } from '../common/settingKeys';
 import { ITelemetry } from '../common/telemetry';
-import { compareIgnoreCase, isObject } from '../common/utils';
+import { compareIgnoreCase, formatError, isObject } from '../common/utils';
 
+import { PROVIDER_PAGE_SIZE, ProviderListOptions, ProviderSnapshot, ProviderUnsupportedError, PullRequestProvider } from '../providers/pullRequestProvider';
 import { PullRequestCommentController } from '../view/pullRequestCommentController';
 
 import { PRCommentControllerRegistry } from '../view/pullRequestCommentControllerRegistry';
@@ -229,6 +231,9 @@ export class GitHubRepository extends Disposable {
 	}
 
 	public get hub(): GitHub {
+		if (this.provider) {
+			throw new ProviderUnsupportedError('GitHub transport');
+		}
 		if (this._hub && this.remote.isEnterprise && (!this.authMatchesServer || !this.remote.matchesServerUri(this._hub.serverUri))) {
 			throw new AuthenticationError(vscode.l10n.t('The authentication session no longer matches this GitHub repository. Refresh the repository or sign in again.'));
 		}
@@ -281,6 +286,7 @@ export class GitHubRepository extends Disposable {
 	}
 
 	override dispose() {
+		this.providerPullRequestLoads.clear();
 		super.dispose();
 		GitHubRepository._allRepoIds.delete(this._id);
 		for (const repoIds of GitHubRepository._succeededPullRequests.values()) {
@@ -304,19 +310,22 @@ export class GitHubRepository extends Disposable {
 		public readonly rootUri: vscode.Uri,
 		private readonly _credentialStore: CredentialStore,
 		public readonly telemetry: ITelemetry,
-		silent: boolean = false
+		silent: boolean = false,
+		public readonly provider?: PullRequestProvider,
 	) {
 		super();
 		GitHubRepository._allRepoIds.add(this._id);
-		this._queriesSchema = mergeQuerySchemaWithShared(sharedSchema.default, defaultSchema);
-		this._register(this._credentialStore.onDidChangeSessions(e => {
-			if (e.provider.id === this.remote.authProviderId) {
-				this._hub = this._credentialStore.getHub(this.remote.authProviderId);
-				if (e.accountChanged || e.serverChanged) {
-					this._metadata = undefined;
+		if (!provider) {
+			this._queriesSchema = mergeQuerySchemaWithShared(sharedSchema.default, defaultSchema);
+			this._register(this._credentialStore.onDidChangeSessions(e => {
+				if (e.provider.id === this.remote.authProviderId) {
+					this._hub = this._credentialStore.getHub(this.remote.authProviderId);
+					if (e.accountChanged || e.serverChanged) {
+						this._metadata = undefined;
+					}
 				}
-			}
-		}));
+			}));
+		}
 		// kick off the comments controller early so that the Comments view is visible and doesn't pop up later in an way that's jarring
 		if (!silent) {
 			this.ensureCommentsController();
@@ -324,6 +333,9 @@ export class GitHubRepository extends Disposable {
 	}
 
 	get authMatchesServer(): boolean {
+		if (this.provider) {
+			return this._credentialStore.azure?.isAuthenticated(this.remote) ?? false;
+		}
 		if ((this.remote.githubServerType === GitHubServerType.GitHubDotCom) && this._credentialStore.isAuthenticated(AuthProvider.github)) {
 			return true;
 		} else if (this.remote.githubServerType === GitHubServerType.Enterprise) {
@@ -352,6 +364,9 @@ export class GitHubRepository extends Disposable {
 	}
 
 	query = async <T>(query: QueryOptions, ignoreSamlErrors: boolean = false, legacyFallback?: { query: DocumentNode, variables: OperationVariables }, allowLimitedFallback: boolean = true): Promise<ApolloQueryResult<T>> => {
+		if (this.provider) {
+			throw new ProviderUnsupportedError(`GitHub query ${(query.query?.definitions[0] as { name?: { value: string } } | undefined)?.name?.value ?? ''}`.trim());
+		}
 		const gql = this.authMatchesServer && this.hub && this.hub.graphql;
 		if (!gql) {
 			const logValue = (query.query.definitions[0] as { name: { value: string } | undefined }).name?.value;
@@ -401,6 +416,9 @@ export class GitHubRepository extends Disposable {
 	};
 
 	mutate = async <T>(mutation: MutationOptions<T>, legacyFallback?: { mutation: DocumentNode, deleteProps: string[] }): Promise<FetchResult<T>> => {
+		if (this.provider) {
+			throw new ProviderUnsupportedError(`GitHub mutation ${(mutation.mutation?.definitions[0] as { name?: { value: string } } | undefined)?.name?.value ?? ''}`.trim());
+		}
 		const gql = this.authMatchesServer && this.hub && this.hub.graphql;
 		if (!gql) {
 			Logger.debug(`Not available for query: ${mutation.context as string}`, GRAPHQL_COMPONENT_ID);
@@ -451,7 +469,53 @@ export class GitHubRepository extends Disposable {
 		return metadata;
 	}
 
+	/**
+	 * The original workflows read a subset of GitHub repository metadata. For Azure DevOps this is
+	 * populated from the Azure repository and the signed-in identity's real permissions.
+	 */
+	private async getProviderMetadata(provider: PullRequestProvider): Promise<IMetadata> {
+		const [repository, currentUser, canContribute] = await Promise.all([provider.repository(), provider.currentUser(), provider.canContribute()]);
+		const parent = repository.parent;
+		const metadata = {
+			node_id: repository.id,
+			name: repository.name,
+			full_name: `${this.remote.owner}/${repository.name}`,
+			owner: { login: this.remote.owner, type: 'Organization' },
+			organization: { login: this.remote.owner },
+			private: true,
+			fork: !!parent,
+			parent: parent && {
+				name: parent.name, full_name: `${parent.project}/${parent.name}`, owner: { login: parent.project },
+				git_url: parent.url, clone_url: parent.url, html_url: parent.url,
+			},
+			clone_url: repository.url,
+			git_url: repository.url,
+			html_url: repository.url,
+			default_branch: repository.defaultBranch,
+			permissions: { admin: false, maintain: false, push: canContribute, triage: canContribute, pull: true },
+			allow_merge_commit: true,
+			allow_squash_merge: true,
+			allow_rebase_merge: true,
+			allow_auto_merge: provider.capabilities.autoMerge,
+			delete_branch_on_merge: false,
+			currentUser,
+		};
+		return metadata as unknown as IMetadata;
+	}
+
 	async getMetadata(): Promise<IMetadata> {
+		if (this.provider) {
+			if (!this._metadata) {
+				const metadata = this.getProviderMetadata(this.provider).catch(error => {
+					if (this._metadata === metadata) {
+						this._metadata = undefined;
+					}
+					throw error;
+				});
+				this._metadata = metadata;
+			}
+			return this._metadata;
+		}
 		if (this._metadata) {
 			const metadata = await this._metadata;
 			Logger.debug(`Using cached metadata ${metadata.owner?.login}/${metadata.name}`, this.id);
@@ -483,6 +547,10 @@ export class GitHubRepository extends Disposable {
 	 * @returns
 	 */
 	async resolveRemote(): Promise<boolean> {
+		if (this.provider) {
+			await this.provider.repository();
+			return true;
+		}
 		try {
 			const { clone_url } = await this.getMetadata();
 			this.remote = GitHubRemote.remoteAsGitHub(parseRemote(this.remote.remoteName, clone_url, this.remote.gitProtocol)!, this.remote.githubServerType);
@@ -500,6 +568,10 @@ export class GitHubRepository extends Disposable {
 
 	async ensure(additionalScopes: boolean = false): Promise<GitHubRepository> {
 		this._initialized = true;
+		if (this.provider) {
+			await this.provider.currentUser();
+			return this;
+		}
 		if (!this._credentialStore.isAuthenticated(this.remote.authProviderId)) {
 			// We need auth now. (ex., a PR is already checked out)
 			// We can no longer wait until later for login to be done
@@ -547,6 +619,13 @@ export class GitHubRepository extends Disposable {
 		if (overrideSetting) {
 			return overrideSetting;
 		}
+		if (this.provider) {
+			const branch = (await this.provider.repository()).defaultBranch;
+			if (!branch) {
+				throw new Error('Azure DevOps did not return a default branch for this repository.');
+			}
+			return branch;
+		}
 		try {
 			const data = await this.getMetadata();
 			return data.default_branch;
@@ -560,6 +639,9 @@ export class GitHubRepository extends Disposable {
 	}
 
 	async getPullRequestTemplates(): Promise<string[] | undefined> {
+		if (this.provider) {
+			return this.provider.pullRequestTemplates();
+		}
 		try {
 			Logger.debug('Fetch pull request templates - enter', this.id);
 			const { query, remote, schema } = await this.ensure();
@@ -592,6 +674,18 @@ export class GitHubRepository extends Disposable {
 
 	private _repoAccessAndMergeMethods: RepoAccessAndMergeMethods | undefined;
 	async getRepoAccessAndMergeMethods(refetch: boolean = false): Promise<RepoAccessAndMergeMethods> {
+		if (this.provider) {
+			if (!this._repoAccessAndMergeMethods || refetch) {
+				const hasWritePermission = await this.provider.canContribute();
+				this._repoAccessAndMergeMethods = {
+					hasWritePermission,
+					// Azure merge-strategy policies are enforced when completing; the server rejects disallowed strategies.
+					mergeMethodsAvailability: { merge: true, squash: true, rebase: true },
+					viewerCanAutoMerge: hasWritePermission && this.provider.capabilities.autoMerge,
+				};
+			}
+			return this._repoAccessAndMergeMethods;
+		}
 		try {
 			if (!this._repoAccessAndMergeMethods || refetch) {
 				Logger.debug(`Fetch repo permissions and available merge methods - enter`, this.id);
@@ -629,6 +723,9 @@ export class GitHubRepository extends Disposable {
 
 	private _branchHasMergeQueue: Map<string, MergeMethod> = new Map();
 	async mergeQueueMethodForBranch(branch: string): Promise<MergeMethod | undefined> {
+		if (this.provider) {
+			return undefined;
+		}
 		if (this._branchHasMergeQueue.has(branch)) {
 			return this._branchHasMergeQueue.get(branch)!;
 		}
@@ -685,6 +782,12 @@ export class GitHubRepository extends Disposable {
 	async getCommitParent(ref: string): Promise<string | undefined> {
 		Logger.debug(`Fetch commit for ref ${ref} - enter`, this.id);
 		try {
+			if (this.provider) {
+				if (!this.provider.commitParent) {
+					throw new ProviderUnsupportedError('Reading commit parents');
+				}
+				return await this.provider.commitParent(ref);
+			}
 			const { octokit, remote } = await this.ensure();
 			const commit = (await octokit.call(octokit.api.repos.getCommit, { owner: remote.owner, repo: remote.repositoryName, ref })).data;
 			return commit.parents[0].sha;
@@ -695,7 +798,18 @@ export class GitHubRepository extends Disposable {
 	}
 
 
+	async getProviderPullRequests(options: ProviderListOptions, page?: number): Promise<PullRequestData> {
+		if (!this.provider) {
+			throw new Error('Provider pull request lists are only available for Azure DevOps repositories.');
+		}
+		const result = await this.provider.list({ ...options, cursor: ((page ?? 1) - 1) * PROVIDER_PAGE_SIZE });
+		return { items: result.items.map(item => this.createOrUpdatePullRequestModel(item)), hasMorePages: result.nextCursor !== undefined };
+	}
+
 	async getAllPullRequests(page?: number): Promise<PullRequestData | undefined> {
+		if (this.provider) {
+			return this.getProviderPullRequests({}, page);
+		}
 		let remote: GitHubRemote | undefined;
 		try {
 			Logger.debug(`Fetch all pull requests - enter`, this.id);
@@ -790,6 +904,21 @@ export class GitHubRepository extends Disposable {
 	}
 
 	async getPullRequestForBranch(branch: string, headOwner: string, throwOnError: boolean = false): Promise<PullRequestModel | undefined> {
+		if (this.provider) {
+			try {
+				const open = await this.provider.list({ status: 'open', sourceBranch: branch });
+				const candidates = open.items.length ? open.items : (await this.provider.list({ status: 'all', sourceBranch: branch })).items;
+				// Prefer an open pull request, then the most recently created one.
+				const match = candidates.sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt))[0];
+				return match ? this.createOrUpdatePullRequestModel(match) : undefined;
+			} catch (error) {
+				Logger.error(`Fetching pull request for branch failed: ${formatError(error)}`, this.id);
+				if (throwOnError) {
+					throw error;
+				}
+				return undefined;
+			}
+		}
 		let remote: GitHubRemote | undefined;
 		try {
 			Logger.debug(`Fetch pull requests for branch - enter`, this.id);
@@ -832,6 +961,9 @@ export class GitHubRepository extends Disposable {
 	}
 
 	async getStackCandidate(baseBranch: string): Promise<StackCandidate | undefined> {
+		if (this.provider) {
+			return undefined;
+		}
 		const parent = await this.getPullRequestForBranch(baseBranch, this.remote.owner, true);
 		if (!parent || parent.state !== GithubItemStateEnum.Open || parent.head?.ref !== baseBranch
 			|| parent.head.owner.toLowerCase() !== this.remote.owner.toLowerCase()
@@ -1150,6 +1282,10 @@ export class GitHubRepository extends Disposable {
 	}
 
 	async getMaxPullRequest(): Promise<number | undefined> {
+		if (this.provider) {
+			const { items } = await this.provider.list({ status: 'all' });
+			return items.length ? Math.max(...items.map(item => item.number)) : undefined;
+		}
 		return this._getMaxItem(false);
 	}
 
@@ -1210,6 +1346,9 @@ export class GitHubRepository extends Disposable {
 	}
 
 	async getViewerPermission(): Promise<ViewerPermission> {
+		if (this.provider) {
+			return (await this.provider.canContribute()) ? ViewerPermission.Write : ViewerPermission.Read;
+		}
 		try {
 			Logger.debug(`Fetch viewer permission - enter`, this.id);
 			const { query, remote, schema } = await this.ensure();
@@ -1356,10 +1495,16 @@ export class GitHubRepository extends Disposable {
 	}
 
 	async getAuthenticatedUser(): Promise<IAccount> {
+		if (this.provider) {
+			return this.provider.currentUser();
+		}
 		return await this._credentialStore.getCurrentUser(this.remote.authProviderId);
 	}
 
 	async getAuthenticatedUserEmails(): Promise<string[]> {
+		if (this.provider) {
+			return [];
+		}
 		try {
 			Logger.debug(`Fetch authenticated user emails - enter`, this.id);
 			const { octokit } = await this.ensure();
@@ -1376,12 +1521,21 @@ export class GitHubRepository extends Disposable {
 		}
 	}
 
-	createOrUpdatePullRequestModel(pullRequest: PullRequest, silent: boolean = false): PullRequestModel {
+	createOrUpdatePullRequestModel(pullRequest: PullRequest, silent: boolean = false, snapshot?: ProviderSnapshot): PullRequestModel {
 		let model = this._pullRequestModelsByNumber.get(pullRequest.number)?.model;
 		if (model) {
-			model.update(pullRequest);
+			if (snapshot) {
+				model.applyProviderSnapshot(snapshot);
+			} else {
+				model.update(this.provider ? {
+					...pullRequest, labels: model.item.labels, commits: model.item.commits, commentCount: model.item.commentCount,
+				} : pullRequest);
+			}
 		} else {
 			model = new PullRequestModel(this._credentialStore, this.telemetry, this, this.remote, pullRequest);
+			if (snapshot) {
+				model.applyProviderSnapshot(snapshot);
+			}
 			const prModel = model;
 			const disposables: vscode.Disposable[] = [];
 			disposables.push(model.onDidChange(e => this._onPullRequestModelChanged(prModel, e)));
@@ -1412,6 +1566,15 @@ export class GitHubRepository extends Disposable {
 	}
 
 	async createPullRequest(params: OctokitCommon.PullsCreateParams): Promise<PullRequestModel> {
+		if (this.provider) {
+			const separator = params.head.indexOf(':');
+			const headOwner = separator < 0 ? this.remote.owner : params.head.slice(0, separator);
+			if (headOwner.toLowerCase() !== this.remote.owner.toLowerCase()) {
+				throw new ProviderUnsupportedError('Creating a pull request from another Azure DevOps project');
+			}
+			const created = await this.provider.create(params.title ?? '', params.body ?? '', params.head.slice(separator + 1), params.base, !!params.draft);
+			return this.createOrUpdatePullRequestModel(created);
+		}
 		try {
 			Logger.debug(`Create pull request - enter`, this.id);
 			const metadata = await this.getMetadata();
@@ -1520,10 +1683,29 @@ export class GitHubRepository extends Disposable {
 		};
 	}
 
+	private readonly providerPullRequestLoads = new Map<number, Promise<PullRequestModel>>();
+
 	async getPullRequest(id: number, callerName: string, useCache: boolean = false, silent: boolean = false, loadMode: 'default' | 'overview' = 'default'): Promise<PullRequestModel | undefined> {
 		if (useCache && this._pullRequestModelsByNumber.has(id)) {
 			Logger.debug(`Using cached pull request model for ${id}`, this.id);
 			return this._pullRequestModelsByNumber.get(id)!.model;
+		}
+		if (this.provider) {
+			if (!Number.isSafeInteger(id) || id <= 0) {
+				throw new Error(`Invalid Azure DevOps pull request number: ${id}`);
+			}
+			const pending = this.providerPullRequestLoads.get(id);
+			if (pending) {
+				return pending;
+			}
+			const request = this.provider.load(id).then(snapshot => {
+				if (this.isDisposed) {
+					throw new Error('The repository session changed while the pull request was loading. Reopen the pull request to retry.');
+				}
+				return this.createOrUpdatePullRequestModel(snapshot.pullRequest, silent, snapshot);
+			}).finally(() => this.providerPullRequestLoads.delete(id));
+			this.providerPullRequestLoads.set(id, request);
+			return request;
 		}
 
 		// Explicit overview requests already identify a PR; the max-number lookup is
@@ -1637,6 +1819,9 @@ export class GitHubRepository extends Disposable {
 	 * @param ref The commit
 	 */
 	async getFile(filePath: string, ref: string): Promise<Uint8Array> {
+		if (this.provider) {
+			return new TextEncoder().encode(await this.provider.file(filePath, ref));
+		}
 		const { octokit, remote } = await this.ensure();
 		let contents: string = '';
 		let fileContent: { data: { content: string; encoding: string; sha: string } };
@@ -1684,6 +1869,12 @@ export class GitHubRepository extends Disposable {
 
 	async hasBranch(branchName: string): Promise<string | undefined> {
 		Logger.appendLine(`Fetch branch ${branchName} - enter`, this.id);
+		if (this.provider) {
+			if (!this.provider.hasBranch) {
+				throw new ProviderUnsupportedError('Checking for a branch');
+			}
+			return this.provider.hasBranch(branchName);
+		}
 		const { query, remote, schema } = await this.ensure();
 
 		const { data } = await query<GetBranchResponse>({
@@ -1707,6 +1898,13 @@ export class GitHubRepository extends Disposable {
 	}
 
 	async listBranches(owner: string, repositoryName: string, prefix: string | undefined): Promise<string[]> {
+		if (this.provider) {
+			if (owner.toLowerCase() !== this.remote.owner.toLowerCase() || repositoryName.toLowerCase() !== this.remote.repositoryName.toLowerCase()) {
+				throw new ProviderUnsupportedError('Listing branches of another Azure DevOps repository');
+			}
+			const branches = await this.provider.branches();
+			return prefix ? branches.filter(branch => branch.startsWith(prefix)) : branches;
+		}
 		const { query, remote, schema } = await this.ensure();
 		Logger.debug(`List branches for ${owner}/${repositoryName} - enter`, this.id);
 
@@ -1755,6 +1953,16 @@ export class GitHubRepository extends Disposable {
 	}
 
 	async deleteBranch(pullRequestModel: PullRequestModel): Promise<void> {
+		if (this.provider) {
+			if (!pullRequestModel.validatePullRequestModel('Unable to delete branch')) {
+				return;
+			}
+			if (!pullRequestModel.head.repositoryCloneUrl.equals(this.remote.gitProtocol)) {
+				throw new Error(vscode.l10n.t('The source branch belongs to another Azure DevOps repository and was not deleted.'));
+			}
+			await this.provider.deleteBranch(pullRequestModel.head.ref, pullRequestModel.head.sha);
+			return;
+		}
 		const { octokit } = await this.ensure();
 
 		if (!pullRequestModel.validatePullRequestModel('Unable to delete branch')) {
@@ -1774,6 +1982,9 @@ export class GitHubRepository extends Disposable {
 	}
 
 	async getMentionableUsers(): Promise<IAccount[]> {
+		if (this.provider) {
+			return (await this.provider.reviewerCandidates()).users;
+		}
 		Logger.debug(`Fetch mentionable users - enter`, this.id);
 		const { query, remote, schema } = await this.ensure();
 
@@ -1837,6 +2048,9 @@ export class GitHubRepository extends Disposable {
 	}
 
 	async getAssignableUsers(): Promise<IAccount[]> {
+		if (this.provider) {
+			return (await this.provider.reviewerCandidates()).users;
+		}
 		Logger.debug(`Fetch assignable users - enter`, this.id);
 		const { query, remote, schema } = await this.ensure();
 
@@ -1953,6 +2167,9 @@ export class GitHubRepository extends Disposable {
 	}
 
 	async getOrgTeamsCount(): Promise<number> {
+		if (this.provider) {
+			return (await this.provider.reviewerCandidates()).teams.length;
+		}
 		Logger.debug(`Fetch Teams Count - enter`, this.id);
 		if (!this._credentialStore.isAuthenticatedWithAdditionalScopes(this.remote.authProviderId)) {
 			return 0;
@@ -1986,6 +2203,9 @@ export class GitHubRepository extends Disposable {
 	}
 
 	async getOrgTeams(refreshKind: TeamReviewerRefreshKind): Promise<(ITeam & { repositoryNames: string[] })[]> {
+		if (this.provider) {
+			return (await this.provider.reviewerCandidates()).teams.map(team => ({ ...team, repositoryNames: [this.remote.repositoryName] }));
+		}
 		Logger.debug(`Fetch Teams - enter`, this.id);
 		if ((refreshKind === TeamReviewerRefreshKind.None) || (refreshKind === TeamReviewerRefreshKind.Try && !this._credentialStore.isAuthenticatedWithAdditionalScopes(this.remote.authProviderId))) {
 			Logger.debug(`Fetch Teams - exit without fetching teams`, this.id);
@@ -2043,6 +2263,10 @@ export class GitHubRepository extends Disposable {
 	}
 
 	async getPullRequestParticipants(pullRequestNumber: number): Promise<IAccount[]> {
+		if (this.provider) {
+			const snapshot = (await this.provider.load(pullRequestNumber));
+			return snapshot.reviewers.map(review => review.reviewer).filter((reviewer): reviewer is IAccount => !isITeam(reviewer));
+		}
 		Logger.debug(`Fetch participants from a Pull Request`, this.id);
 		const { query, remote, schema } = await this.ensure();
 
@@ -2107,6 +2331,9 @@ export class GitHubRepository extends Disposable {
 	}
 
 	isCurrentUser(authProviderId: AuthProvider, login: string): Promise<boolean> {
+		if (this.provider) {
+			return this.provider.currentUser().then(user => user.login === login);
+		}
 		return this._credentialStore.isCurrentUser(authProviderId, login);
 	}
 
@@ -2117,6 +2344,9 @@ export class GitHubRepository extends Disposable {
 	 */
 	private _useFallbackChecks: boolean = false;
 	async getStatusChecks(number: number): Promise<[PullRequestChecks | null, PullRequestReviewRequirement | null]> {
+		if (this.provider) {
+			return [await this.provider.checks(number), null];
+		}
 		Logger.debug('Get Status Checks - enter', this.id);
 
 		const { query, remote, schema } = await this.ensure();

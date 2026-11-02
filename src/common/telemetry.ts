@@ -24,3 +24,10 @@ export interface ITelemetry {
 	): void;
 	dispose(): Promise<any>;
 }
+
+/** Retains shared workflow instrumentation without creating a reporter or sending data. */
+export class NullTelemetry implements ITelemetry {
+	sendTelemetryEvent(_eventName: string, _properties?: Record<string, string>, _measurements?: Record<string, number>): void { }
+	sendTelemetryErrorEvent(_eventName: string, _properties?: Record<string, string>, _measurements?: Record<string, number>): void { }
+	async dispose(): Promise<void> { }
+}

@@ -46,6 +46,7 @@ module.exports.indentationFilter = [
 	'!.github/**/*.yml',
 	'!**/*.yml',
 	'!resources/emojis.json',
+	'!build/licenses/**',
 
 	// except multiple specific files
 	'!**/package.json',
@@ -58,6 +59,7 @@ module.exports.indentationFilter = [
 module.exports.copyrightFilter = [
 	'**',
 	'!documentation/**/*',
+	'!build/licenses/**',
 	'!.readme/**/*',
 	'!.vscode/**/*',
 	'!.github/**/*',
@@ -85,4 +87,3 @@ module.exports.tsFormattingFilter = [
 	'webviews/**/*.ts',
 	'**/fixtures/**/*'
 ];
-

@@ -88,6 +88,9 @@ function hygiene(some) {
 		const lines = getFileLines(file);
 
 		for (let i = 0; i < copyrightHeaderLines.length; i++) {
+			if (i === 1 && lines[i] === ' *  Copyright (c) jhare96. All rights reserved.') {
+				continue;
+			}
 			if (lines[i] !== copyrightHeaderLines[i]) {
 				console.error(file.relative + ': Missing or bad copyright statement');
 				errorCount++;

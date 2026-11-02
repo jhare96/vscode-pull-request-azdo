@@ -42,7 +42,7 @@ export class RepositoryChangesNode extends TreeNode implements vscode.TreeItem {
 
 		this.command = {
 			title: vscode.l10n.t('View Pull Request Description'),
-			command: 'pr.openDescription',
+			command: 'azdo.pr.openDescription',
 			arguments: [this],
 		};
 		this.tooltip = vscode.l10n.t('Description of pull request #{0}', pullRequestModel.number);
@@ -130,12 +130,8 @@ export class RepositoryChangesNode extends TreeNode implements vscode.TreeItem {
 
 	override async getTreeItem(): Promise<vscode.TreeItem> {
 		this.setLabel();
-		// For enterprise, use placeholder icon instead of trying to fetch avatar
-		if (!DataUri.isGitHubDotComAvatar(this.pullRequestModel.author.avatarUrl)) {
-			this.iconPath = new vscode.ThemeIcon('github');
-		} else {
-			this.iconPath = (await DataUri.avatarCirclesAsImageDataUris(this._pullRequestManager.context, [this.pullRequestModel.author], 16, 16))[0];
-		}
+		// Falls back to the author's initials when no picture is available.
+		this.iconPath = (await DataUri.avatarCirclesAsImageDataUris(this._pullRequestManager.context, [this.pullRequestModel.author], 16, 16))[0];
 		this.description = undefined;
 		if (this.parent.children?.length && this.parent.children.length > 1) {
 			const allSameOwner = this.parent.children.every(child => {

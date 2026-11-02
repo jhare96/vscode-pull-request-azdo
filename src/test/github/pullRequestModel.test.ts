@@ -1027,9 +1027,9 @@ describe('PullRequestModel', function () {
 			assert(getAllFileChangesInfo.calledOnce);
 			const [, , entries] = executeCommand.firstCall.args;
 			const [resourceUri, originalUri, modifiedUri] = entries[0];
-			assert.strictEqual(resourceUri.scheme, 'githubcommit');
-			assert.strictEqual(originalUri.scheme, 'githubcommit');
-			assert.strictEqual(modifiedUri.scheme, 'githubcommit');
+			assert.strictEqual(resourceUri.scheme, 'azdocommit');
+			assert.strictEqual(originalUri.scheme, 'azdocommit');
+			assert.strictEqual(modifiedUri.scheme, 'azdocommit');
 			assert.deepStrictEqual(JSON.parse(originalUri.query), {
 				commit: mergeBase,
 				owner: repo.remote.owner,

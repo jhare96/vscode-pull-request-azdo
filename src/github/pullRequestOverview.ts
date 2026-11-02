@@ -35,6 +35,8 @@ import type { RepositoriesManager } from './repositoriesManager';
 import { supportsStackGitOperations, updateStackBranches } from './updateStackBranches';
 import { getIssueOrURLExpression, parseIssueExpressionOutput, parseReviewers, processDiffLinks, processPermalinks } from './utils';
 import { CancelCodingAgentReply, ChangeBaseReply, ChangeReviewersReply, DeleteReviewResult, MergeArguments, MergeResult, PullRequest, PullRequestPreview, ReadyForReviewAndMergeContext, ReadyForReviewContext, ReviewCommentContext, ReviewType, SubmitReviewArgs, UnresolvedIdentity, UnstackAllResult } from './views';
+import { checkoutPRInWorktree } from './worktree';
+import { AzurePullRequestProvider } from '../azure/pullRequestProvider';
 import { debounce } from '../common/async';
 import { COPILOT_ACCOUNTS, IComment } from '../common/comment';
 import { COPILOT_REVIEWER, COPILOT_REVIEWER_ACCOUNT, COPILOT_SWE_AGENT, copilotEventToStatus, CopilotPRStatus, mostRecentCopilotEvent } from '../common/copilot';
@@ -50,12 +52,13 @@ import { ITelemetry } from '../common/telemetry';
 import { EventType, ReviewEvent, SessionLinkInfo, TimelineEvent } from '../common/timelineEvent';
 import { toOpenIssueWebviewUri, toOpenPullRequestWebviewUri } from '../common/uri';
 import { asPromise, formatError } from '../common/utils';
+import { generateUuid } from '../common/uuid';
 import { IRequestMessage, PULL_REQUEST_OVERVIEW_VIEW_TYPE } from '../common/webview';
 import { toCheckRunLogUri } from '../view/checkRunLogContentProvider';
 import { getGitHubCommitFileSystemProvider } from '../view/githubFileContentProvider';
 
 export class PullRequestOverviewPanel extends IssueOverviewPanel<PullRequestModel> {
-	public static override ID: string = 'PullRequestOverviewPanel';
+	public static override ID: string = 'AzureDevOpsPullRequestOverviewPanel';
 	public static override readonly viewType = PULL_REQUEST_OVERVIEW_VIEW_TYPE;
 	protected override readonly previewLog = { label: 'PR', id: PullRequestOverviewPanel.ID };
 
@@ -138,7 +141,7 @@ export class PullRequestOverviewPanel extends IssueOverviewPanel<PullRequestMode
 
 	private canUpdateStack(item: PullRequestModel): boolean {
 		const checkedOutPullRequestNumber = this.getCheckedOutPullRequestNumber(item);
-		return areStacksEnabled() && this._canUpdateStackAccess
+		return !item.githubRepository.provider && areStacksEnabled() && this._canUpdateStackAccess
 			&& checkedOutPullRequestNumber !== undefined && !!this._updatableStackPullRequestNumbers?.has(checkedOutPullRequestNumber)
 			&& !!this.getStackRepository(item);
 	}
@@ -189,7 +192,7 @@ export class PullRequestOverviewPanel extends IssueOverviewPanel<PullRequestMode
 					"isCopilot" : { "classification": "SystemMetaData", "purpose": "FeatureInsight" }
 				}
 			*/
-			telemetry.sendTelemetryEvent('pr.openDescription', { isCopilot: (panel._item?.author.login === COPILOT_SWE_AGENT) ? 'true' : 'false' });
+			telemetry.sendTelemetryEvent('azdo.pr.openDescription', { isCopilot: (panel._item?.author.login === COPILOT_SWE_AGENT) ? 'true' : 'false' });
 		}
 	}
 
@@ -270,43 +273,43 @@ export class PullRequestOverviewPanel extends IssueOverviewPanel<PullRequestMode
 					}
 				}
 			}),
-			vscode.commands.registerCommand('pr.readyForReviewDescription', async (ctx: ReadyForReviewContext) => {
+			vscode.commands.registerCommand('azdo.pr.readyForReviewDescription', async (ctx: ReadyForReviewContext) => {
 				const panel = PullRequestOverviewPanel.findPanel(ctx.owner, ctx.repo, ctx.number);
 				if (panel) {
 					return panel.readyForReviewCommand();
 				}
 			}),
-			vscode.commands.registerCommand('pr.readyForReviewAndMergeDescription', async (ctx: ReadyForReviewAndMergeContext) => {
+			vscode.commands.registerCommand('azdo.pr.readyForReviewAndMergeDescription', async (ctx: ReadyForReviewAndMergeContext) => {
 				const panel = PullRequestOverviewPanel.findPanel(ctx.owner, ctx.repo, ctx.number);
 				if (panel) {
 					return panel.readyForReviewAndMergeCommand(ctx);
 				}
 			}),
-			vscode.commands.registerCommand('review.approveDescription', (ctx: ReviewCommentContext) => {
+			vscode.commands.registerCommand('azdo.review.approveDescription', (ctx: ReviewCommentContext) => {
 				const panel = PullRequestOverviewPanel.findPanel(ctx.owner, ctx.repo, ctx.number);
 				if (panel) {
 					return panel.approvePullRequestCommand(ctx);
 				}
 			}),
-			vscode.commands.registerCommand('review.commentDescription', (ctx: ReviewCommentContext) => {
+			vscode.commands.registerCommand('azdo.review.commentDescription', (ctx: ReviewCommentContext) => {
 				const panel = PullRequestOverviewPanel.findPanel(ctx.owner, ctx.repo, ctx.number);
 				if (panel) {
 					return panel.submitReviewCommand(ctx);
 				}
 			}),
-			vscode.commands.registerCommand('review.requestChangesDescription', (ctx: ReviewCommentContext) => {
+			vscode.commands.registerCommand('azdo.review.requestChangesDescription', (ctx: ReviewCommentContext) => {
 				const panel = PullRequestOverviewPanel.findPanel(ctx.owner, ctx.repo, ctx.number);
 				if (panel) {
 					return panel.requestChangesCommand(ctx);
 				}
 			}),
-			vscode.commands.registerCommand('review.approveOnDotComDescription', (ctx: ReviewCommentContext) => {
+			vscode.commands.registerCommand('azdo.review.approveOnDotComDescription', (ctx: ReviewCommentContext) => {
 				const panel = PullRequestOverviewPanel.findPanel(ctx.owner, ctx.repo, ctx.number);
 				if (panel) {
 					return openItemOnGitHub(panel._item, telemetry);
 				}
 			}),
-			vscode.commands.registerCommand('review.requestChangesOnDotComDescription', (ctx: ReviewCommentContext) => {
+			vscode.commands.registerCommand('azdo.review.requestChangesOnDotComDescription', (ctx: ReviewCommentContext) => {
 				const panel = PullRequestOverviewPanel.findPanel(ctx.owner, ctx.repo, ctx.number);
 				if (panel) {
 					return openItemOnGitHub(panel._item, telemetry);
@@ -620,7 +623,7 @@ export class PullRequestOverviewPanel extends IssueOverviewPanel<PullRequestMode
 				isIssue: false,
 				emailForCommit: undefined,
 				currentUserReviewState: reviewState,
-				revertable: pullRequest.state === GithubItemStateEnum.Merged,
+				revertable: pullRequest.state === GithubItemStateEnum.Merged && !pullRequest.githubRepository.provider,
 				isCopilotOnMyBehalf: false,
 				stack: undefined,
 				stackLoaded: !areStacksEnabled(),
@@ -629,6 +632,8 @@ export class PullRequestOverviewPanel extends IssueOverviewPanel<PullRequestMode
 				generateDescriptionTitle: this.getGenerateDescriptionTitle(),
 				attestationCommitsEnabled: isAttestationCommitsEnabled(),
 				closingIssues,
+				checksError: pullRequestModel.providerSnapshot?.checks.state === 'error' ? pullRequestModel.providerSnapshot.checks.message : null,
+				discussionsError: pullRequestModel.providerSnapshot?.discussions.state === 'error' ? pullRequestModel.providerSnapshot.discussions.message : null,
 			};
 			this._postMessage({
 				command: 'pr.initialize',
@@ -669,11 +674,17 @@ export class PullRequestOverviewPanel extends IssueOverviewPanel<PullRequestMode
 				Logger.error(`Failed to update deferred assignable users: ${formatError(error)}`, PullRequestOverviewPanel.ID);
 			});
 			const deferredDataPromise = Promise.all([
-				measureDeferred('statusChecks', pullRequestModel.getStatusChecks()),
+				measureDeferred('statusChecks', pullRequestModel.getStatusChecks().then(
+					result => ({ result, error: null as string | null }),
+					error => ({ result: [null, null] as Awaited<ReturnType<PullRequestModel['getStatusChecks']>>, error: formatError(error) }))),
 				reviewRequestsPromise,
 				measureDeferred('branchName', this._folderRepositoryManager.getBranchNameForPullRequest(pullRequestModel)),
 				measureDeferred('mergeQueueMethod', this._folderRepositoryManager.mergeQueueMethodForBranch(pullRequestModel.base.ref, pullRequestModel.remote.owner, pullRequestModel.remote.repositoryName)),
-				measureDeferred('headUpToDate', this._folderRepositoryManager.isHeadUpToDateWithBase(pullRequestModel)),
+				measureDeferred('headUpToDate', this._folderRepositoryManager.isHeadUpToDateWithBase(pullRequestModel).catch(error => {
+					// Only the update-branch prompt depends on this; keep checks and reviewers updating.
+					Logger.warn(`Unable to compare the pull request branch with its base: ${formatError(error)}`, PullRequestOverviewPanel.ID);
+					return undefined;
+				})),
 				measureDeferred('mergeability', pullRequestModel.getMergeability()),
 				measureDeferred('preferredEmail', this._folderRepositoryManager.getPreferredEmail(pullRequestModel)),
 				measureDeferred('coAuthors', COPILOT_ACCOUNTS[pullRequestModel.author.login] ? pullRequestModel.getCoAuthors() : Promise.resolve([])),
@@ -700,10 +711,11 @@ export class PullRequestOverviewPanel extends IssueOverviewPanel<PullRequestMode
 				await this._postMessage({
 					command: 'pr.update',
 					pullrequest: {
-						status: status[0],
-						reviewRequirement: status[1],
+						status: status.result[0],
+						reviewRequirement: status.result[1],
+						checksError: status.error,
 						isLocalHeadDeleted: !branchInfo,
-						canUpdateBranch: pullRequest.item.viewerCanUpdate && !isBranchUpToDateWithBase && this.isUpdateBranchWithGitHubEnabled(),
+						canUpdateBranch: pullRequest.item.viewerCanUpdate && isBranchUpToDateWithBase === false && this.isUpdateBranchWithGitHubEnabled(),
 						mergeable: mergeability.mergeability,
 						reviewers,
 						hasReviewDraft,
@@ -739,11 +751,15 @@ export class PullRequestOverviewPanel extends IssueOverviewPanel<PullRequestMode
 						events: processedEvents,
 						reviewers,
 						currentUserReviewState: this.getCurrentUserReviewState(reviewers, currentUser),
+						discussionsError: null,
 					} satisfies Partial<PullRequest>,
 				});
 				Logger.debug(`Deferred timeline loaded in ${Math.round(performance.now() - timelineStart)}ms`, PullRequestOverviewPanel.ID);
 			}, error => {
 				Logger.error(`Failed to update deferred timeline: ${formatError(error)}`, PullRequestOverviewPanel.ID);
+				if (updateSequence === this._updateSequence) {
+					void this._postMessage({ command: 'pr.update', pullrequest: { discussionsError: formatError(error) } satisfies Partial<PullRequest> });
+				}
 			});
 			if (pullRequest.isResolved()) {
 				this._folderRepositoryManager.checkBranchUpToDate(pullRequest, true);
@@ -860,9 +876,9 @@ export class PullRequestOverviewPanel extends IssueOverviewPanel<PullRequestMode
 		switch (message.command) {
 			case 'pr.checkout':
 				return this.checkoutPullRequest(message);
-			case 'pr.merge':
+			case 'azdo.pr.merge':
 				return this.mergePullRequest(message);
-			case 'pr.merge-stack':
+			case 'azdo.pr.merge-stack':
 				return PullRequestReviewCommon.mergeStack(this.getReviewContext(), message);
 			case 'pr.unstack-all':
 				return this.unstackAll(message);
@@ -872,9 +888,9 @@ export class PullRequestOverviewPanel extends IssueOverviewPanel<PullRequestMode
 				return this.changeEmail(message);
 			case 'pr.deleteBranch':
 				return this.deleteBranch(message);
-			case 'pr.readyForReview':
+			case 'azdo.pr.readyForReview':
 				return this.setReadyForReview(message);
-			case 'pr.readyForReviewAndMerge':
+			case 'azdo.pr.readyForReviewAndMerge':
 				return this.setReadyForReviewAndMerge(message);
 			case 'pr.convertToDraft':
 				return this.setConvertToDraft(message);
@@ -934,7 +950,139 @@ export class PullRequestOverviewPanel extends IssueOverviewPanel<PullRequestMode
 				return this.openDiffFromLink(message);
 			case 'pr.add-attestation-commit':
 				return this.addAttestationCommitMessage(message);
+			case 'azdo.pr.details':
+				return this.azdoDetails(message);
+			case 'azdo.pr.vote':
+				return this.azdoAction(message, (provider, number) => provider.setVote(number, message.args.vote));
+			case 'azdo.pr.requeue':
+				return this.azdoAction(message, provider => provider.requeuePolicy(message.args.id));
+			case 'azdo.pr.link-work-item':
+				return this.azdoLinkWorkItem(message);
+			case 'azdo.pr.unlink-work-item':
+				return this.azdoAction(message, (provider, number) => provider.unlinkWorkItem(number, message.args.id));
+			case 'azdo.pr.open-url':
+				return this.azdoOpenUrl(message);
+			case 'azdo.pr.complete':
+				return this.azdoComplete(message);
+			case 'azdo.pr.reload':
+				return this.azdoReload(message);
+			case 'azdo.pr.checkout-worktree':
+				await checkoutPRInWorktree(this._telemetry, this._folderRepositoryManager, this._item, undefined, { direct: true });
+				return this._replyMessage(message, undefined);
 		}
+	}
+
+	private async azdoComplete(message: IRequestMessage<{ autoComplete: boolean }>): Promise<void> {
+		const strategies: (vscode.QuickPickItem & { method: MergeMethod })[] = [
+			{ label: 'Merge (no fast-forward)', description: 'Preserve the branch history with a merge commit', method: 'merge' },
+			{ label: 'Squash commit', description: 'Combine all commits into one on the target branch', method: 'squash' },
+			{ label: 'Rebase and fast-forward', description: 'Replay the source commits onto the target branch', method: 'rebase' },
+		];
+		const autoComplete = message.args.autoComplete;
+		const pick = await vscode.window.showQuickPick(strategies, {
+			title: autoComplete ? 'Set auto-complete' : `Complete pull request !${this._item.number}`,
+			placeHolder: 'Merge type',
+		});
+		if (!pick) {
+			return this._replyMessage(message, undefined);
+		}
+		try {
+			if (autoComplete) {
+				if (this._item.autoMerge && this._item.autoMergeMethod !== pick.method) {
+					await this._item.disableAutoMerge();
+				}
+				await this._item.enableAutoMerge(pick.method);
+				return this._replyMessage(message, await this.azdoProvider().overview(this._item.number));
+			}
+			const confirm = await vscode.window.showWarningMessage(
+				`Complete pull request !${this._item.number} into ${this._item.base.ref} using "${pick.label}"?`, { modal: true }, 'Complete');
+			if (confirm !== 'Complete') {
+				return this._replyMessage(message, undefined);
+			}
+			await this.mergePullRequest({ ...message, args: { title: undefined, description: undefined, method: pick.method } });
+		} catch (e) {
+			vscode.window.showErrorMessage(formatError(e));
+			this._throwError(message, formatError(e));
+		}
+	}
+
+	/** Reloads the pull request from Azure DevOps rather than re-rendering the cached model. */
+	private async azdoReload(message: IRequestMessage<void>): Promise<void> {
+		try {
+			const model = await this._item.githubRepository.getPullRequest(this._item.number, 'PullRequestOverview.reload');
+			if (!model) {
+				throw new Error(vscode.l10n.t('Pull request !{0} could not be loaded.', this._item.number));
+			}
+			await this.updateItem(model);
+			this._replyMessage(message, undefined);
+		} catch (e) {
+			vscode.window.showErrorMessage(vscode.l10n.t('Refreshing the pull request failed: {0}', formatError(e)));
+			this._throwError(message, formatError(e));
+		}
+	}
+
+	private azdoProvider(): AzurePullRequestProvider {
+		const provider = this._item.githubRepository.provider;
+		if (!(provider instanceof AzurePullRequestProvider)) {
+			throw new Error('This pull request is not backed by Azure DevOps.');
+		}
+		return provider;
+	}
+
+	private async azdoDetails(message: IRequestMessage<void>): Promise<void> {
+		try {
+			this._replyMessage(message, await this.azdoProvider().overview(this._item.number));
+		} catch (e) {
+			this._throwError(message, formatError(e));
+		}
+	}
+
+	private async azdoAction(message: IRequestMessage<any>, action: (provider: AzurePullRequestProvider, number: number) => Promise<void>): Promise<void> {
+		try {
+			const provider = this.azdoProvider();
+			await action(provider, this._item.number);
+			this._replyMessage(message, await provider.overview(this._item.number));
+		} catch (e) {
+			vscode.window.showErrorMessage(formatError(e));
+			this._throwError(message, formatError(e));
+		}
+	}
+
+	private async azdoLinkWorkItem(message: IRequestMessage<void>): Promise<void> {
+		const value = await vscode.window.showInputBox({
+			title: 'Link work item',
+			prompt: 'Work item ID',
+			validateInput: text => /^[1-9]\d*$/.test(text.trim()) ? undefined : 'Enter a numeric work item ID.',
+		});
+		if (!value) {
+			return this._replyMessage(message, undefined);
+		}
+		return this.azdoAction(message, (provider, number) => provider.linkWorkItem(number, Number(value.trim())));
+	}
+
+	private async azdoOpenUrl(message: IRequestMessage<{ url: string }>): Promise<void> {
+		const url = vscode.Uri.parse(message.args.url);
+		if (url.scheme === 'https') {
+			await vscode.env.openExternal(url);
+		}
+		this._replyMessage(message, undefined);
+	}
+
+	protected override getHtmlForWebview() {
+		const nonce = generateUuid();
+		const uri = vscode.Uri.joinPath(this._extensionUri, 'dist', 'webview-azdo-pr.js');
+		return `<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8">
+		<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src vscode-resource: https: data:; media-src https:; font-src data: ${this._webview!.cspSource}; script-src 'nonce-${nonce}'; style-src vscode-resource: 'unsafe-inline' http: https: data:;">
+		<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	</head>
+	<body class="${process.platform}">
+		<div id=app></div>
+		<script nonce="${nonce}" src="${this._webview!.asWebviewUri(uri).toString()}"></script>
+	</body>
+</html>`;
 	}
 
 	private async addAttestationCommitMessage(message: IRequestMessage<void>): Promise<void> {
@@ -1200,7 +1348,7 @@ export class PullRequestOverviewPanel extends IssueOverviewPanel<PullRequestMode
 	}
 
 	private checkoutPullRequest(message: IRequestMessage<any>): void {
-		vscode.commands.executeCommand('pr.pick', this._item).then(
+		vscode.commands.executeCommand('azdo.pr.pick', this._item).then(
 			() => {
 				const isCurrentlyCheckedOut = this._item.equals(this._folderRepositoryManager.activePullRequest);
 				this._replyMessage(message, { isCurrentlyCheckedOut: isCurrentlyCheckedOut });
@@ -1388,7 +1536,7 @@ export class PullRequestOverviewPanel extends IssueOverviewPanel<PullRequestMode
 
 			const mergeResult: MergeResult = {
 				state: result.merged ? GithubItemStateEnum.Merged : GithubItemStateEnum.Open,
-				revertable: result.merged,
+				revertable: result.merged && !this._item.githubRepository.provider,
 				events: result.timeline
 			};
 			this._replyMessage(message, mergeResult);
@@ -1634,7 +1782,7 @@ export class PullRequestOverviewPanel extends IssueOverviewPanel<PullRequestMode
 	}
 
 	protected override deleteCommentPromise(comment: IComment): Promise<void> {
-		return this._item.deleteReviewComment(comment.id.toString());
+		return this._item.deleteReviewComment(comment.id.toString(), comment.graphNodeId);
 	}
 
 	private async deleteReview(message: IRequestMessage<void>) {

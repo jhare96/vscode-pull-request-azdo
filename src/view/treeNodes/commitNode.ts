@@ -8,9 +8,8 @@ import { getGitChangeType } from '../../common/diffHunk';
 import { FILE_LIST_LAYOUT, PR_SETTINGS_NAMESPACE } from '../../common/settingKeys';
 import { DataUri, reviewPath, toReviewUri } from '../../common/uri';
 import { dateFromNow } from '../../common/utils';
-import { OctokitCommon } from '../../github/common';
 import { FolderRepositoryManager } from '../../github/folderRepositoryManager';
-import { AccountType, IAccount } from '../../github/interface';
+import { AccountType, IAccount, PullRequestCommit } from '../../github/interface';
 import { IResolvedPullRequestModel, PullRequestModel } from '../../github/pullRequestModel';
 import { GitFileChangeModel } from '../fileChangeModel';
 import { DirectoryTreeNode } from './directoryTreeNode';
@@ -27,7 +26,7 @@ export class CommitNode extends TreeNode implements vscode.TreeItem {
 		parent: TreeNodeParent,
 		private readonly pullRequestManager: FolderRepositoryManager,
 		private readonly pullRequest: PullRequestModel,
-		private readonly commit: OctokitCommon.PullsListCommitsResponseItem,
+		private readonly commit: PullRequestCommit,
 		private readonly isCurrent: boolean
 	) {
 		super(parent);
@@ -46,13 +45,9 @@ export class CommitNode extends TreeNode implements vscode.TreeItem {
 
 	async getTreeItem(): Promise<vscode.TreeItem> {
 		if (this.commit.author) {
-			// For enterprise, use placeholder icon instead of trying to fetch avatar
-			if (!DataUri.isGitHubDotComAvatar(this.commit.author.avatar_url)) {
-				this.iconPath = new vscode.ThemeIcon('github');
-			} else {
-				const author: IAccount = { id: this.commit.author.node_id, login: this.commit.author.login, url: this.commit.author.url, avatarUrl: this.commit.author.avatar_url, accountType: this.commit.author.type as AccountType };
-				this.iconPath = (await DataUri.avatarCirclesAsImageDataUris(this.pullRequestManager.context, [author], 16, 16))[0];
-			}
+			const author: IAccount = { id: this.commit.author.node_id ?? '', login: this.commit.author.login ?? '', name: this.commit.commit.author?.name, url: this.commit.author.url ?? '', avatarUrl: this.commit.author.avatar_url, accountType: this.commit.author.type as AccountType };
+			// Falls back to the author's initials when no picture is available.
+			this.iconPath = (await DataUri.avatarCirclesAsImageDataUris(this.pullRequestManager.context, [author], 16, 16))[0];
 		}
 		this.description = this._getDescription();
 		return this;

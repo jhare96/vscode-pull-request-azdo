@@ -34,6 +34,10 @@ npm-debug.log
 **/*.ts
 *.vsix
 **/*.bak
+resources/icons/github_logo.png
+!LICENSE
+!dist/*ThirdPartyNotices.txt
+!dist/browser/*ThirdPartyNotices.txt
 package.insiders.json
 README.insiders.md
 tsfmt.json

@@ -33,14 +33,14 @@ export function panelKey(owner: string, repo: string, number: number): string {
 }
 
 export class IssueOverviewPanel<TItem extends IssueModel = IssueModel> extends WebviewBase {
-	public static ID: string = 'IssueOverviewPanel';
+	public static ID: string = 'AzureDevOpsIssueOverviewPanel';
 	/**
 	 * All open panels, keyed by "owner/repo#number".
 	 */
 	protected static _panels: Map<string, IssueOverviewPanel> = new Map();
 	protected static _repositoriesManager: RepositoriesManager | undefined;
 
-	public static readonly viewType: string = 'IssueOverview';
+	public static readonly viewType: string = 'AzureDevOpsIssueOverview';
 
 	protected readonly _panel: vscode.WebviewPanel;
 	protected _item: TItem;
@@ -327,7 +327,7 @@ export class IssueOverviewPanel<TItem extends IssueModel = IssueModel> extends W
 			state: issue.state,
 			stateReason: issue.stateReason,
 			events,
-			continueOnGitHub: this.continueOnGitHub(),
+			continueOnGitHub: this.continueOnGitHub() && !issue.githubRepository.provider,
 			canEdit,
 			hasWritePermission,
 			isIssue: true,
@@ -989,7 +989,7 @@ export class IssueOverviewPanel<TItem extends IssueModel = IssueModel> extends W
 	}
 
 	protected deleteCommentPromise(comment: IComment): Promise<void> {
-		return this._item.deleteIssueComment(comment.id.toString());
+		return this._item.deleteIssueComment(comment.id.toString(), comment.graphNodeId);
 	}
 
 	private deleteComment(message: IRequestMessage<IComment>) {
@@ -1072,7 +1072,7 @@ export class IssueOverviewPanel<TItem extends IssueModel = IssueModel> extends W
 <html lang="en">
 	<head>
 		<meta charset="UTF-8">
-		<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src vscode-resource: https:; media-src https:; script-src 'nonce-${nonce}'; style-src vscode-resource: 'unsafe-inline' http: https: data:;">
+		<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src vscode-resource: https: data:; media-src https:; script-src 'nonce-${nonce}'; style-src vscode-resource: 'unsafe-inline' http: https: data:;">
 
 		<meta name="viewport" content="width=device-width, initial-scale=1.0">
 	</head>

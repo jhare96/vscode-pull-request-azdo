@@ -3,12 +3,12 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { TelemetryReporter } from '@vscode/extension-telemetry';
 import * as vscode from 'vscode';
 
 import { LiveShare } from 'vsls/vscode.js';
 import { PostCommitCommandsProvider, Repository } from './api/api';
 import { GitApiImpl } from './api/api1';
+import { AzureSessions } from './azure/sessions';
 import { registerCommands } from './commands';
 import { AuthProvider } from './common/authentication';
 import { commands, contexts } from './common/executeCommands';
@@ -18,29 +18,23 @@ import * as PersistentState from './common/persistentState';
 import { parseRepositoryRemotes } from './common/remote';
 import { AUTO_REPO_DETECTION, AutoRepoDetectionVariants, BRANCH_PUBLISH, EXPERIMENTAL_CHAT, FILE_LIST_LAYOUT, GIT, IGNORE_SUBMODULES, OPEN_DIFF_ON_CLICK, PR_SETTINGS_NAMESPACE, SHOW_INLINE_OPEN_FILE_ACTION } from './common/settingKeys';
 import { initBasedOnSettingChange } from './common/settingsUtils';
+import { NullTelemetry } from './common/telemetry';
 import { TemporaryState } from './common/temporaryState';
 import { Schemes } from './common/uri';
 import { isDescendant } from './common/utils';
 import { EXTENSION_ID, FOCUS_REVIEW_MODE } from './constants';
-import { createExperimentationService, ExperimentationTelemetry } from './experimentationService';
 import { CopilotRemoteAgentManager } from './github/copilotRemoteAgent';
 import { CredentialStore } from './github/credentials';
 import { FolderRepositoryManager } from './github/folderRepositoryManager';
 import { FolderRepositoryManagerResolver } from './github/folderRepositoryManagerResolver';
-import { IssueOverviewPanel } from './github/issueOverview';
 import { OverviewRestorer } from './github/overviewRestorer';
 import { PullRequestOverviewPanel } from './github/pullRequestOverview';
 import { RepositoriesManager } from './github/repositoriesManager';
 import { registerBuiltinGitProvider, registerLiveShareGitProvider } from './gitProviders/api';
-import { GitHubContactServiceProvider } from './gitProviders/GitHubContactServiceProvider';
 import { GitLensIntegration } from './integrations/gitlens/gitlensImpl';
-import { IssueFeatureRegistrar } from './issues/issueFeatureRegistrar';
-import { StateManager } from './issues/stateManager';
-import { IssueContextProvider } from './lm/issueContextProvider';
 import { PullRequestContextProvider } from './lm/pullRequestContextProvider';
 import { registerTools } from './lm/tools/tools';
 import { migrate } from './migrations';
-import { NotificationsFeatureRegister } from './notifications/notificationsFeatureRegistar';
 import { NotificationsManager } from './notifications/notificationsManager';
 import { NotificationsProvider } from './notifications/notificationsProvider';
 import { ThemeWatcher } from './themeWatcher';
@@ -62,9 +56,7 @@ import { ReviewsManager } from './view/reviewsManager';
 import { TreeDecorationProviders } from './view/treeDecorationProviders';
 import { WebviewViewCoordinator } from './view/webviewViewCoordinator';
 
-const ingestionKey = '0c6ae279ed8443289764825290e4f9e2-1a736e7c-1324-4338-be46-fc2a58ae4d14-7255';
-
-let telemetry: ExperimentationTelemetry;
+let telemetry: NullTelemetry;
 
 const ACTIVATION = 'Activation';
 
@@ -159,8 +151,7 @@ async function init(
 
 	liveshareApiPromise.then(api => {
 		if (api) {
-			// register the pull request provider to suggest PR contacts
-			api.registerContactServiceProvider('github-pr', new GitHubContactServiceProvider(reposManager));
+			Logger.debug('Live Share contact suggestions use GitHub accounts and are unavailable for Azure DevOps.', ACTIVATION);
 		}
 	});
 
@@ -269,50 +260,35 @@ async function init(
 	const layout = vscode.workspace.getConfiguration(PR_SETTINGS_NAMESPACE).get<string>(FILE_LIST_LAYOUT);
 	await vscode.commands.executeCommand('setContext', 'fileListLayout:flat', layout === 'flat');
 
-	const issueStateManager = new StateManager(git, reposManager, context);
-	const issuesFeatures = new IssueFeatureRegistrar(git, reposManager, reviewsManager, context, telemetry, issueStateManager);
-	context.subscriptions.push(issuesFeatures);
-	await issuesFeatures.initialize();
-
+	// Work items (the original issue features) and GitHub notifications are deferred for Azure DevOps.
 	context.subscriptions.push(credentialStore.onDidChangeSessions(async e => {
-		if (e.provider.id !== AuthProvider.github && e.provider.id !== AuthProvider.githubEnterprise) {
+		if (e.provider.id !== AuthProvider.azureDevOps) {
 			return;
 		}
 		const clearAuthState = e.accountChanged || e.serverChanged;
 		if (clearAuthState) {
-			IssueOverviewPanel.clearAll();
 			PullRequestOverviewPanel.clearAll();
 			activePrViewCoordinator.clearForAuthChange();
 			createPrHelper.clearForAuthChange();
 			const reviewsCleanup = reviewsManager.clearForAuthChange();
-			issueStateManager.clearForAuthChange();
-			notificationsManager.clear();
 			reposManager.clearForAuthChange();
 			await reviewsCleanup;
 		}
 		await reposManager.refreshRepositories();
 		await Promise.all(reviewsManager.reviewManagers.map(reviewManager => reviewManager.updateState(true)));
 		reviewsManager.refreshPullRequestsTree(!clearAuthState);
-		await issueStateManager.refreshAfterAuthChange();
-		notificationsManager.refresh();
 	}));
 
 	const pullRequestContextProvider = new PullRequestContextProvider(prsTreeModel, reposManager, context);
 	context.subscriptions.push(pullRequestContextProvider);
-	context.subscriptions.push(vscode.chat.registerChatAttachContextProvider('githubpr', pullRequestContextProvider));
-	context.subscriptions.push(vscode.chat.registerChatTabContextProvider({ uri: { scheme: 'webview-panel', pattern: '**/webview-PullRequestOverview**' } }, 'githubpr', pullRequestContextProvider));
-	const issueContextProvider = new IssueContextProvider(issueStateManager, reposManager, context);
-	context.subscriptions.push(vscode.chat.registerChatAttachContextProvider('githubissue', issueContextProvider));
-	context.subscriptions.push(vscode.chat.registerChatTabContextProvider({ uri: { scheme: 'webview-panel', pattern: '**/webview-IssueOverview**' } }, 'githubissue', issueContextProvider));
-
-	const notificationsFeatures = new NotificationsFeatureRegister(credentialStore, reposManager, telemetry, notificationsManager);
-	context.subscriptions.push(notificationsFeatures);
+	context.subscriptions.push(vscode.chat.registerChatAttachContextProvider('azdopr', pullRequestContextProvider));
+	context.subscriptions.push(vscode.chat.registerChatTabContextProvider({ uri: { scheme: 'webview-panel', pattern: '**/webview-AzureDevOpsPullRequestOverview**' } }, 'azdopr', pullRequestContextProvider));
 
 	context.subscriptions.push(new GitLensIntegration());
 
 	context.subscriptions.push(new OverviewRestorer(telemetry, context, credentialStore, folderRepositoryManagerResolver));
 
-	await vscode.commands.executeCommand('setContext', 'github:initialized', true);
+	await vscode.commands.executeCommand('setContext', 'azureDevOps:initialized', true);
 
 	registerPostCommitCommandsProvider(context, reposManager, git);
 
@@ -343,8 +319,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<GitApi
 	Logger.appendLine(`Extension version: ${vscode.extensions.getExtension(EXTENSION_ID)?.packageJSON.version}`, 'Activation');
 
 	// @ts-ignore
-	if (EXTENSION_ID === 'GitHub.vscode-pull-request-github-insiders') {
-		const stable = vscode.extensions.getExtension('github.vscode-pull-request-github');
+	if (EXTENSION_ID === 'jhare96.vscode-pull-request-azdo-insiders') {
+		const stable = vscode.extensions.getExtension('jhare96.vscode-pull-request-azdo');
 		if (stable !== undefined) {
 			throw new Error(
 				'GitHub Pull Requests and Issues Nightly cannot be used while GitHub Pull Requests and Issues is also installed. Please ensure that only one version of the extension is installed.',
@@ -353,16 +329,16 @@ export async function activate(context: vscode.ExtensionContext): Promise<GitApi
 	}
 
 	const showPRController = new ShowPullRequest();
-	vscode.commands.registerCommand('github.api.preloadPullRequest', async (shouldShow: boolean) => {
+	vscode.commands.registerCommand('azdo.github.api.preloadPullRequest', async (shouldShow: boolean) => {
 		await vscode.commands.executeCommand('setContext', FOCUS_REVIEW_MODE, true);
-		await commands.focusView('github:activePullRequest:welcome');
+		await commands.focusView('azureDevOps:activePullRequest:welcome');
 		showPRController.shouldShow = shouldShow;
 	});
 	await setGitSettingContexts(context);
 
 	Logger.debug('Creating API implementation.', 'Activation');
 
-	telemetry = new ExperimentationTelemetry(new TelemetryReporter(ingestionKey));
+	telemetry = new NullTelemetry();
 	context.subscriptions.push(telemetry);
 
 	const deferred = await deferredActivate(context, showPRController);
@@ -410,7 +386,7 @@ function registerPostCommitCommandsProvider(context: vscode.ExtensionContext, re
 			}));
 			Logger.appendLine(`Found ${found ? 'a repo' : 'no repos'} when getting post commit commands.`, componentId);
 			return found ? [{
-				command: 'pr.pushAndCreate',
+				command: 'azdo.pr.pushAndCreate',
 				title: vscode.l10n.t('{0} Commit & Create Pull Request', '$(git-pull-request-create)'),
 				tooltip: vscode.l10n.t('Commit & Create Pull Request')
 			}] : [];
@@ -456,12 +432,9 @@ async function deferredActivate(context: vscode.ExtensionContext, showPRControll
 	PersistentState.init(context);
 	await migrate(context);
 	TemporaryState.init(context);
-	Logger.debug('Creating credential store.', 'Activation');
-	const credentialStore = new CredentialStore(telemetry, context);
+	Logger.debug('Creating Azure DevOps credential store.', 'Activation');
+	const credentialStore = new CredentialStore(telemetry, context, new AzureSessions(context));
 	context.subscriptions.push(credentialStore);
-	const experimentationService = await createExperimentationService(context, telemetry);
-	await experimentationService.initializePromise;
-	await experimentationService.isCachedFlightEnabled('githubaa');
 	await credentialStore.create();
 
 	const reposManager = new RepositoriesManager(credentialStore, telemetry);
@@ -510,8 +483,8 @@ async function deferredActivate(context: vscode.ExtensionContext, showPRControll
 	}
 
 	const inMemPRFileSystemProvider = getInMemPRFileSystemProvider({ reposManager, gitAPI: apiImpl, credentialStore })!;
-	const readOnlyMessage = new vscode.MarkdownString(vscode.l10n.t('Cannot edit this pull request file. [Check out](command:pr.checkoutFromReadonlyFile) this pull request to edit.'));
-	readOnlyMessage.isTrusted = { enabledCommands: ['pr.checkoutFromReadonlyFile'] };
+	const readOnlyMessage = new vscode.MarkdownString(vscode.l10n.t('Cannot edit this pull request file. [Check out](command:azdo.pr.checkoutFromReadonlyFile) this pull request to edit.'));
+	readOnlyMessage.isTrusted = { enabledCommands: ['azdo.pr.checkoutFromReadonlyFile'] };
 	context.subscriptions.push(vscode.workspace.registerFileSystemProvider(Schemes.Pr, inMemPRFileSystemProvider, { isReadonly: readOnlyMessage }));
 	const githubFilesystemProvider = getGitHubCommitFileSystemProvider({ reposManager, gitAPI: apiImpl, credentialStore })!;
 	context.subscriptions.push(vscode.workspace.registerFileSystemProvider(Schemes.GitHubCommit, githubFilesystemProvider, { isReadonly: new vscode.MarkdownString(vscode.l10n.t('GitHub commits cannot be edited')) }));
