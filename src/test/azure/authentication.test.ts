@@ -27,6 +27,7 @@ describe('Azure DevOps authentication', () => {
 		authentication = new AzureAuthentication({
 			globalState,
 			secrets: {
+				keys: async () => [...secrets.keys()],
 				get: async key => secrets.get(key),
 				store: async (key, value) => { secrets.set(key, value); },
 				delete: async key => { secrets.delete(key); },

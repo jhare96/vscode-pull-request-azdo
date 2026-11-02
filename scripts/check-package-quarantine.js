@@ -11,6 +11,7 @@ const DEFAULT_BASE_REF = 'HEAD^1';
 const DEFAULT_QUARANTINE_DAYS = 7;
 const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1000;
 const REGISTRY_URL = 'https://registry.npmjs.org';
+const MICROSOFT_REGISTRY_URL = 'https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry';
 const REQUEST_ATTEMPTS = 3;
 const REQUEST_CONCURRENCY = 6;
 const REQUEST_TIMEOUT_MS = 30_000;
@@ -293,15 +294,20 @@ async function fetchPackageMetadata(packageName) {
 }
 
 async function getPublicationDates(packageVersions) {
-	for (const { name, version, resolved, integrity } of packageVersions) {
+	packageVersions = packageVersions.map(({ name, version, resolved, integrity }) => {
 		if (!resolved || !integrity) {
 			throw new Error(`Cannot verify ${name}@${version}: new or changed packages must have both resolved and integrity in package-lock.json.`);
+		}
+		// The public Microsoft feed mirrors npm tarballs; still verify identity and integrity against npm.
+		if (resolved.startsWith(`${MICROSOFT_REGISTRY_URL}/`)) {
+			resolved = `${REGISTRY_URL}/${resolved.slice(MICROSOFT_REGISTRY_URL.length + 1)}`;
 		}
 		const url = new URL(resolved);
 		if (url.origin !== REGISTRY_URL || url.username || url.password || url.search || url.hash) {
 			throw new Error(`Cannot verify ${name}@${version}: only tarballs from ${REGISTRY_URL} are supported.`);
 		}
-	}
+		return { name, version, resolved, integrity };
+	});
 
 	const packageNames = [...new Set(packageVersions.map(packageVersion => packageVersion.name))];
 	const metadataByPackage = new Map();
