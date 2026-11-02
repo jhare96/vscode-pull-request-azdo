@@ -1,0 +1,66 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  test:
+    name: Build and test
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The quarantine check compares package-lock.json with HEAD^1: the base branch for
+          # pull request merge commits, or the previous commit on main.
+          fetch-depth: 2
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+
+      - name: Enforce package quarantine
+        run: npm run check:package-quarantine
+
+      - name: Install dependencies
+        run: npm ci
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 1
+
+      - name: Compile
+        run: npm run compile
+
+      - name: Run hygiene checks
+        run: npm run hygiene
+
+      - name: Run lint
+        run: npx eslint --cache . --ext .ts,.tsx --max-warnings=0
+
+      - name: Verify command registrations
+        run: npm run check:commands
+
+      - name: Run test suite
+        run: xvfb-run -a npm test
+        env:
+          TEST_JUNIT_XML_PATH: ${{ runner.temp }}/test-results.xml
+
+      - name: Upload test results
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: test-results
+          path: ${{ runner.temp }}/test-results.xml
+          if-no-files-found: ignore

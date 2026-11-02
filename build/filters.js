@@ -43,6 +43,7 @@ module.exports.indentationFilter = [
 	'!**/ThirdPartyNotices.txt',
 	'!**/LICENSE.{txt,rtf}',
 	'!**/LICENSE',
+	'!.github/**/*.yml',
 	'!**/*.yml',
 	'!resources/emojis.json',
 
