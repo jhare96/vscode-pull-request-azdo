@@ -28,11 +28,23 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: "20"
+          node-version: "24"
           cache: "npm"
 
-      - name: Install dependencies
-        run: npm ci
+      - name: Install dependencies and VS Code type definitions
+        run: |
+          # npm ci runs update-dts via postinstall, which downloads types from GitHub.
+          for attempt in 1 2 3; do
+            if npm ci; then
+              break
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              echo "::error::Dependency installation failed after 3 attempts."
+              exit 1
+            fi
+            echo "::warning::Dependency installation failed; retrying in 10 seconds (attempt $attempt of 3)."
+            sleep 10
+          done
         env:
           # Skip Playwright browser downloads to avoid installation failures
           PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 1
@@ -46,9 +58,6 @@ jobs:
             echo "Playwright not found, skipping browser installation"
           fi
         continue-on-error: true
-
-      - name: Update VS Code type definitions
-        run: npm run update-dts
 
       - name: Basic build verification
         run: |
