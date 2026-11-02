@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Copyright (c) jhare96. All rights reserved.
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
@@ -21,6 +21,24 @@ describe('Standalone fork contributions', () => {
 	it('keeps a stable standalone extension identity', () => {
 		assert.strictEqual(`${manifest.publisher}.${manifest.name}`, EXTENSION_ID);
 		assert.strictEqual(EXTENSION_ID, 'jhare96.vscode-pull-request-azdo');
+	});
+
+	it('makes independent branding and support explicit without replacing upstream copyright', () => {
+		const localization = JSON.parse(readFileSync(path.join(root, 'package.nls.json'), 'utf8'));
+		assert.strictEqual(localization.displayName, 'Azure DevOps Pull Requests (Unofficial)');
+		assert.ok(localization.description.includes('Not affiliated with, endorsed by, or supported by Microsoft or GitHub'));
+		assert.strictEqual(manifest.icon, 'resources/icons/azdo-pr.png');
+		assert.ok(existsSync(path.join(root, manifest.icon)));
+		assert.strictEqual(manifest.bugs.url, 'https://github.com/jhare96/vscode-pull-request-azdo/issues');
+		assert.ok(readFileSync(path.join(root, 'LICENSE'), 'utf8').includes('Copyright (c) Microsoft Corporation.'));
+	});
+
+	it('does not initialize upstream telemetry or experimentation in activation', () => {
+		const activation = readFileSync(path.join(root, 'src/extension.ts'), 'utf8');
+		assert.ok(activation.includes('telemetry = new NullTelemetry()'));
+		assert.ok(!activation.includes('TelemetryReporter'));
+		assert.ok(!activation.includes('ingestionKey'));
+		assert.ok(!activation.includes('createExperimentationService'));
 	});
 
 	it('retains the original view surfaces under independent identifiers', () => {

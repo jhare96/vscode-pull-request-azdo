@@ -2,7 +2,8 @@
 	"name": "vscode-pull-request-azdo",
 	"displayName": "%displayName%",
 	"description": "%description%",
-	"icon": "resources/icons/github_logo.png",
+	"icon": "resources/icons/azdo-pr.png",
+	"homepage": "https://github.com/jhare96/vscode-pull-request-azdo#readme",
 	"repository": {
 		"type": "git",
 		"url": "https://github.com/jhare96/vscode-pull-request-azdo"
@@ -953,7 +954,7 @@
 					"id": "pr:azureDevOps",
 					"name": "%view.pr.github.name%",
 					"when": "(azureDevOps:reposManagerState != NeedsAuthentication && !azureDevOps:resolvingConflicts) && !isSessionsWindow",
-					"icon": "$(github-inverted)",
+					"icon": "$(git-pull-request)",
 					"accessibilityHelpContent": "%view.pr.github.accessibilityHelpContent%"
 				},
 				{
@@ -4255,14 +4256,15 @@
 		"bundle": "webpack --mode production --env esbuild",
 		"bundle:node": "webpack --mode production --config-name extension:node --config-name webviews",
 		"bundle:web": "webpack --mode production --config-name extension:webworker --config-name webviews",
-		"clean": "rm -r dist/",
+		"clean": "node -e \"require('fs').rmSync('dist', { recursive: true, force: true })\"",
 		"compile": "webpack --mode development --env esbuild",
 		"compile:test": "tsc -p tsconfig.test.json",
 		"watch:test": "tsc -w -p tsconfig.test.json",
 		"compile:node": "webpack --mode development --config-name extension:node --config-name webviews",
 		"compile:web": "webpack --mode development --config-name extension:webworker --config-name webviews",
 		"lint": "eslint --fix --cache . --ext .ts,.tsx",
-		"package": "npx vsce package",
+		"package": "npx --yes @vscode/vsce@4.0.0 package --no-dependencies",
+		"vscode:prepublish": "npm run clean && npm run bundle",
 		"test": "npm run test:preprocess && npm run test:scripts && npm run test:webviews && node ./out/src/test/runTests.js",
 		"test:scripts": "mocha \"out/src/test/scripts/**/*.test.js\"",
 		"test:webviews": "node scripts/test-webviews.js",

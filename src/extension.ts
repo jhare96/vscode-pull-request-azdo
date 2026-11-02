@@ -3,7 +3,6 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { TelemetryReporter } from '@vscode/extension-telemetry';
 import * as vscode from 'vscode';
 
 import { LiveShare } from 'vsls/vscode.js';
@@ -19,11 +18,11 @@ import * as PersistentState from './common/persistentState';
 import { parseRepositoryRemotes } from './common/remote';
 import { AUTO_REPO_DETECTION, AutoRepoDetectionVariants, BRANCH_PUBLISH, EXPERIMENTAL_CHAT, FILE_LIST_LAYOUT, GIT, IGNORE_SUBMODULES, OPEN_DIFF_ON_CLICK, PR_SETTINGS_NAMESPACE, SHOW_INLINE_OPEN_FILE_ACTION } from './common/settingKeys';
 import { initBasedOnSettingChange } from './common/settingsUtils';
+import { NullTelemetry } from './common/telemetry';
 import { TemporaryState } from './common/temporaryState';
 import { Schemes } from './common/uri';
 import { isDescendant } from './common/utils';
 import { EXTENSION_ID, FOCUS_REVIEW_MODE } from './constants';
-import { ExperimentationTelemetry } from './experimentationService';
 import { CopilotRemoteAgentManager } from './github/copilotRemoteAgent';
 import { CredentialStore } from './github/credentials';
 import { FolderRepositoryManager } from './github/folderRepositoryManager';
@@ -57,9 +56,7 @@ import { ReviewsManager } from './view/reviewsManager';
 import { TreeDecorationProviders } from './view/treeDecorationProviders';
 import { WebviewViewCoordinator } from './view/webviewViewCoordinator';
 
-const ingestionKey = '0c6ae279ed8443289764825290e4f9e2-1a736e7c-1324-4338-be46-fc2a58ae4d14-7255';
-
-let telemetry: ExperimentationTelemetry;
+let telemetry: NullTelemetry;
 
 const ACTIVATION = 'Activation';
 
@@ -341,7 +338,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<GitApi
 
 	Logger.debug('Creating API implementation.', 'Activation');
 
-	telemetry = new ExperimentationTelemetry(new TelemetryReporter(ingestionKey));
+	telemetry = new NullTelemetry();
 	context.subscriptions.push(telemetry);
 
 	const deferred = await deferredActivate(context, showPRController);

@@ -1,0 +1,10 @@
+<!-- SPDX-License-Identifier: MIT -->
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <rect x="4" y="4" width="120" height="120" rx="26" fill="#163a46"/>
+  <path d="M40 43v42m48 0V65c0-16-9-22-25-22h-3m10-10L60 43l10 10" fill="none" stroke="#57ddc5" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+  <g fill="#163a46" stroke="#ffffff" stroke-width="7">
+    <circle cx="40" cy="33" r="10"/>
+    <circle cx="40" cy="95" r="10"/>
+    <circle cx="88" cy="95" r="10"/>
+  </g>
+</svg>
