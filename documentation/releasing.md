@@ -4,6 +4,11 @@ Releases are built by the [Release workflow](../.github/workflows/release.yml) w
 version tag is pushed. It packages the VSIX, generates an SPDX SBOM, and attaches both
 to a new GitHub release. Publishing to the Marketplace is not automated.
 
+CodeQL is managed by GitHub's default setup in the repository's code scanning settings.
+Do not add an advanced CodeQL job to the Security workflow while default setup is enabled:
+GitHub rejects its analysis uploads. The Security workflow handles dependency review and
+OSV-Scanner separately.
+
 ## Release steps
 
 1. Edit the version in [package.json](../package.json).
