@@ -271,9 +271,47 @@ describe('Package quarantine check', () => {
 		await assert.rejects(quarantine.getPublicationDates(changed), /tarball does not match/);
 	});
 
+	for (const name of ['alpha', '@scope/alpha']) {
+		it(`verifies Microsoft mirror artifacts against npm metadata for ${name}`, async () => {
+			const original = artifact(name, '1.0.0');
+			assert.ok(original.resolved);
+			const mirrored = {
+				...original,
+				resolved: original.resolved.replace('https://registry.npmjs.org', 'https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry'),
+			};
+			const fetch = mockRegistry(registryMetadata(original, '2026-09-09T00:00:00Z'));
+			const dates = await quarantine.getPublicationDates([mirrored]);
+
+			assert.strictEqual(fetch.firstCall.args[0], `https://registry.npmjs.org/${encodeURIComponent(name)}`);
+			assert.strictEqual(quarantine.findQuarantineViolations([mirrored], dates, new Date('2026-09-10T00:00:00Z'), 7).length, 1);
+		});
+	}
+
+	for (const replacement of [
+		{ resolved: 'https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/attacker/-/attacker-1.0.0.tgz' },
+		{ integrity: `sha512-${Buffer.alloc(64, 2).toString('base64')}` },
+	]) {
+		it(`rejects Microsoft mirror substitutions of ${Object.keys(replacement)[0]}`, async () => {
+			const original = artifact('alpha', '1.0.0');
+			const mirrored = {
+				...original,
+				resolved: 'https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/alpha/-/alpha-1.0.0.tgz',
+				...replacement,
+			};
+			mockRegistry(registryMetadata(original));
+
+			await assert.rejects(quarantine.getPublicationDates([mirrored]), /does not match the npm registry/);
+		});
+	}
+
 	for (const resolved of [
 		'https://example.invalid/alpha.tgz',
 		'http://registry.npmjs.org/alpha/-/alpha-1.0.0.tgz',
+		'http://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/alpha/-/alpha-1.0.0.tgz',
+		'https://ms-feed-25.pkgs.visualstudio.com/other/_packaging/npm-public/npm/registry/alpha/-/alpha-1.0.0.tgz',
+		'https://ms-feed-25.pkgs.visualstudio.com.evil.invalid/1es-public/_packaging/npm-public/npm/registry/alpha/-/alpha-1.0.0.tgz',
+		'https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/alpha/-/alpha-1.0.0.tgz?redirect=1',
+		'https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/alpha/-/alpha-1.0.0.tgz#fragment',
 		'file:../alpha.tgz',
 		'git+https://example.invalid/alpha.git',
 	]) {

@@ -35,6 +35,23 @@ jobs:
       - name: Enforce package quarantine
         run: npm run check:package-quarantine
 
+      # Match release SBOM generation before node_modules contains build tooling.
+      - name: Generate SBOM
+        uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
+        with:
+          path: .
+          format: spdx-json
+          output-file: ${{ runner.temp }}/vscode-pull-request-azdo.spdx.json
+          upload-artifact: false
+          upload-release-assets: false
+
+      - name: Upload SBOM
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: sbom
+          path: ${{ runner.temp }}/vscode-pull-request-azdo.spdx.json
+          if-no-files-found: error
+
       - name: Install dependencies
         run: npm ci
         env:
@@ -64,3 +81,13 @@ jobs:
           name: test-results
           path: ${{ runner.temp }}/test-results.xml
           if-no-files-found: ignore
+
+      - name: Package extension
+        run: npm run package -- --out "${{ runner.temp }}/vscode-pull-request-azdo.vsix"
+
+      - name: Upload VSIX
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: vsix
+          path: ${{ runner.temp }}/vscode-pull-request-azdo.vsix
+          if-no-files-found: error
