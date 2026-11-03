@@ -7,73 +7,69 @@ diffs, leave comments, submit reviews, create pull requests, and complete change
 endorsed by, or supported by Microsoft or GitHub. Support is best-effort, with no
 guaranteed response time.
 
-## Install locally
+## Installation
+
+**Proposed-API compatibility:** Installing the VSIX alone is not sufficient. You
+must explicitly enable the extension's proposed VS Code APIs and fully restart
+VS Code. Use a compatible VS Code Insiders build if your stable build does not
+allow those APIs; enabling the permission cannot make unavailable APIs available.
 
 ### Prerequisites
 
 - Git.
-- Node.js 24 LTS and npm for building and packaging.
 - VS Code 1.141.0 or later, compatible with the extension's proposed APIs. Use a
   compatible VS Code Insiders build if your stable build does not allow those APIs.
-- The `code` command on your PATH, or `code-insiders` if using Insiders. On macOS,
-  run **Shell Command: Install 'code' command in PATH** from the Command Palette.
-
-The extension currently uses proposed VS Code APIs, so installing the VSIX alone is
-not sufficient: explicitly enable those APIs as described below.
-
-### Build a VSIX
-
-Clone this repository and install its locked dependencies:
-
-```sh
-git clone https://github.com/jhare96/vscode-pull-request-azdo.git
-cd vscode-pull-request-azdo
-npm ci
-```
-
-Package the extension:
-
-```sh
-npm run package -- --out azure-devops-pull-requests.vsix
-```
-
-Packaging cleans stale build output, builds production bundles, and generates
-third-party licence notices. The VSIX is written to the repository root. Internet
-access is required to install dependencies and retrieve build and packaging tools.
 
 ### Install and enable proposed APIs
 
-Install the package:
+1. Download the `.vsix` asset from the
+   [latest release](https://github.com/jhare96/vscode-pull-request-azdo/releases/latest).
+2. In VS Code, run **Extensions: Install from VSIX…** from the Command Palette
+   and select the downloaded file.
+3. Run **Preferences: Configure Runtime Arguments** from the Command Palette and
+   add the extension ID to the `enable-proposed-api` array in `argv.json`,
+   preserving any existing entries:
+
+   ```json
+   {
+     "enable-proposed-api": ["jhare96.vscode-pull-request-azdo"]
+   }
+   ```
+
+4. Fully restart VS Code by closing all windows and quitting the application,
+   then relaunching it. If VS Code reports that an API proposal is unavailable or
+   not permitted, use a compatible Insiders build.
+5. Open your Azure DevOps repository and sign in as described in
+   [Connect to Azure DevOps](#connect-to-azure-devops).
+
+Node.js and npm are not required to install a released VSIX.
+
+Alternatively, install and launch from the command line:
 
 ```sh
-code --install-extension ./azure-devops-pull-requests.vsix --force
+code --install-extension /path/to/downloaded-extension.vsix --force
 ```
 
-Close all VS Code windows, then launch your Azure DevOps repository with the API
-permission enabled:
+Close all VS Code windows and quit the application, then launch your Azure DevOps
+repository with the API permission enabled:
 
 ```sh
 code --enable-proposed-api=jhare96.vscode-pull-request-azdo /path/to/your/repository
 ```
 
-For Insiders, replace `code` with `code-insiders` in both commands.
+These commands require `code` on your PATH. On macOS, run **Shell Command: Install
+'code' command in PATH** from the Command Palette. For Insiders, replace `code`
+with `code-insiders` in both commands. Use the `argv.json` setup above to keep the
+permission enabled across normal launches.
 
-To keep the permission enabled across normal launches, run **Preferences: Configure
-Runtime Arguments** from the Command Palette and add the extension ID to the
-`enable-proposed-api` array in `argv.json`, preserving any existing entries:
+### Update a local installation
 
-```json
-{
-  "enable-proposed-api": ["jhare96.vscode-pull-request-azdo"]
-}
-```
-
-Fully restart VS Code after changing runtime arguments. If VS Code reports that an
-API proposal is unavailable or not permitted, use a compatible Insiders build; the
-flag does not make unavailable APIs available.
-
-To update your local installation, pull the latest changes, run `npm ci`, rebuild
-the VSIX, and repeat the install command with `--force`.
+Download a newer `.vsix` from the
+[releases page](https://github.com/jhare96/vscode-pull-request-azdo/releases/latest)
+and install it with **Extensions: Install from VSIX…**, or repeat the command-line
+install command with the new file and `--force`. Keep the proposed-API permission
+enabled and fully restart VS Code after updating. A newer release may require a
+newer compatible VS Code or Insiders build.
 
 ## Connect to Azure DevOps
 
@@ -168,6 +164,41 @@ file uploads, reactions, attestation commits, reverting merged pull requests, an
 creating pull requests from forks.
 
 ## Development
+
+### Build from source
+
+In addition to the [installation prerequisites](#prerequisites), building and
+packaging require Node.js 24 LTS and npm. Internet access is required to install
+dependencies and retrieve build and packaging tools.
+
+Clone this repository and install its locked dependencies:
+
+```sh
+git clone https://github.com/jhare96/vscode-pull-request-azdo.git
+cd vscode-pull-request-azdo
+npm ci
+```
+
+Package the extension:
+
+```sh
+npm run package -- --out azure-devops-pull-requests.vsix
+```
+
+Packaging cleans stale build output, builds production bundles, and generates
+third-party licence notices. The VSIX is written to the repository root. Install
+it using **Extensions: Install from VSIX…** and enable proposed APIs as described
+in [Installation](#installation), or use:
+
+```sh
+code --install-extension ./azure-devops-pull-requests.vsix --force
+```
+
+For Insiders, use `code-insiders` instead of `code`. To update a source-built
+installation, pull the latest changes, run `npm ci`, rebuild the VSIX, and
+reinstall it. Keep proposed APIs enabled and fully restart VS Code.
+
+### Run and debug
 
 After running `npm ci`, open this repository in VS Code and select **Launch
 Extension** in Run and Debug, then press **F5**. The launch configuration builds the
