@@ -46,7 +46,7 @@
 		"treeItemMarkdownLabel",
 		"treeViewMarkdownMessage"
 	],
-	"version": "0.170.0",
+	"version": "0.1.0",
 	"publisher": "jhare96",
 	"engines": {
 		"node": ">=20",
