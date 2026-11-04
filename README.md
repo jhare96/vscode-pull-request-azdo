@@ -7,6 +7,9 @@ diffs, leave comments, submit reviews, create pull requests, and complete change
 endorsed by, or supported by Microsoft or GitHub. Support is best-effort, with no
 guaranteed response time.
 
+### Disclaimer
+This fork was ported agentically and planned maintenance will be supervised agent work.
+
 ## Installation
 
 **Proposed-API compatibility:** Installing the VSIX alone is not sufficient. You
