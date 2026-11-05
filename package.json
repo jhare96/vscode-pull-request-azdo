@@ -1878,7 +1878,7 @@
 				"command": "azdo.issue.createIssueFromFile",
 				"title": "%command.azdo.issue.createIssueFromFile.title%",
 				"icon": "$(check)",
-				"enablement": "!issues.creatingFromFile"
+				"enablement": "!azureDevOps:creatingIssueFromFile"
 			},
 			{
 				"command": "azdo.issue.issueCompletion",
@@ -2094,7 +2094,7 @@
 				"key": "shift+alt+r",
 				"mac": "shift+alt+cmd+r",
 				"command": "azdo.pr.revealFileInOS",
-				"when": "(focusedView =~ /(pr|prStatus):github/ && listFocus) && !isSessionsWindow"
+				"when": "(focusedView =~ /(pr|prStatus):azureDevOps/ && listFocus) && !isSessionsWindow"
 			}
 		],
 		"menus": {
@@ -2133,11 +2133,11 @@
 				},
 				{
 					"command": "azdo.pr.configureRemotes",
-					"when": "(gitHubOpenRepositoryCount != 0) && !isSessionsWindow"
+					"when": "(azureDevOps:openRepositoryCount != 0) && !isSessionsWindow"
 				},
 				{
 					"command": "azdo.pr.configurePRViewlet",
-					"when": "(gitHubOpenRepositoryCount != 0) && !isSessionsWindow"
+					"when": "(azureDevOps:openRepositoryCount != 0) && !isSessionsWindow"
 				},
 				{
 					"command": "azdo.pr.pick",
@@ -2193,7 +2193,7 @@
 				},
 				{
 					"command": "azdo.pr.create",
-					"when": "(gitHubOpenRepositoryCount != 0 && azureDevOps:authenticated) && !isSessionsWindow"
+					"when": "(azureDevOps:openRepositoryCount != 0 && azureDevOps:authenticated) && !isSessionsWindow"
 				},
 				{
 					"command": "azdo.pr.pushAndCreate",
@@ -2201,7 +2201,7 @@
 				},
 				{
 					"command": "azdo.pr.merge",
-					"when": "(gitHubOpenRepositoryCount != 0 && azureDevOps:inReviewMode) && !isSessionsWindow"
+					"when": "(azureDevOps:openRepositoryCount != 0 && azureDevOps:inReviewMode) && !isSessionsWindow"
 				},
 				{
 					"command": "azdo.pr.readyForReview",
@@ -2221,7 +2221,7 @@
 				},
 				{
 					"command": "azdo.pr.openPullRequestOnGitHub",
-					"when": "(gitHubOpenRepositoryCount != 0 && azureDevOps:inReviewMode) && !isSessionsWindow"
+					"when": "(azureDevOps:openRepositoryCount != 0 && azureDevOps:inReviewMode) && !isSessionsWindow"
 				},
 				{
 					"command": "azdo.pr.addToStack",
@@ -2229,11 +2229,11 @@
 				},
 				{
 					"command": "azdo.pr.openAllDiffs",
-					"when": "(gitHubOpenRepositoryCount != 0 && azureDevOps:inReviewMode) && !isSessionsWindow"
+					"when": "(azureDevOps:openRepositoryCount != 0 && azureDevOps:inReviewMode) && !isSessionsWindow"
 				},
 				{
 					"command": "azdo.pr.refreshDescription",
-					"when": "(gitHubOpenRepositoryCount != 0 && azureDevOps:inReviewMode) && !isSessionsWindow"
+					"when": "(azureDevOps:openRepositoryCount != 0 && azureDevOps:inReviewMode) && !isSessionsWindow"
 				},
 				{
 					"command": "azdo.pr.openFileOnGitHub",
@@ -2273,7 +2273,7 @@
 				},
 				{
 					"command": "azdo.pr.openDescription",
-					"when": "(gitHubOpenRepositoryCount != 0 && azureDevOps:inReviewMode) && !isSessionsWindow"
+					"when": "(azureDevOps:openRepositoryCount != 0 && azureDevOps:inReviewMode) && !isSessionsWindow"
 				},
 				{
 					"command": "azdo.pr.focusDescriptionInput",
@@ -2289,7 +2289,7 @@
 				},
 				{
 					"command": "azdo.pr.closeRelatedEditors",
-					"when": "(gitHubOpenRepositoryCount != 0) && !isSessionsWindow"
+					"when": "(azureDevOps:openRepositoryCount != 0) && !isSessionsWindow"
 				},
 				{
 					"command": "azdo.pr.toggleEditorCommentingOn",
@@ -2377,7 +2377,7 @@
 				},
 				{
 					"command": "azdo.pr.refreshList",
-					"when": "(gitHubOpenRepositoryCount != 0 && azureDevOps:authenticated && azureDevOps:hasGitHubRemotes) && !isSessionsWindow"
+					"when": "(azureDevOps:openRepositoryCount != 0 && azureDevOps:authenticated && azureDevOps:hasGitHubRemotes) && !isSessionsWindow"
 				},
 				{
 					"command": "azdo.pr.setFileListLayoutAsTree",
@@ -2397,7 +2397,7 @@
 				},
 				{
 					"command": "azdo.pr.signin",
-					"when": "(gitHubOpenRepositoryCount != 0 && azureDevOps:hasGitHubRemotes) && !isSessionsWindow"
+					"when": "(azureDevOps:openRepositoryCount != 0 && azureDevOps:hasGitHubRemotes) && !isSessionsWindow"
 				},
 				{
 					"command": "azdo.pr.signinNoEnterprise",
@@ -2485,7 +2485,7 @@
 				},
 				{
 					"command": "azdo.pr.checkoutByNumber",
-					"when": "(gitHubOpenRepositoryCount != 0 && azureDevOps:initialized && azureDevOps:authenticated) && !isSessionsWindow"
+					"when": "(azureDevOps:openRepositoryCount != 0 && azureDevOps:initialized && azureDevOps:authenticated) && !isSessionsWindow"
 				},
 				{
 					"command": "azdo.pr.collapseAllComments",
@@ -2581,7 +2581,7 @@
 				},
 				{
 					"command": "azdo.pr.refreshComments",
-					"when": "(gitHubOpenRepositoryCount != 0) && !isSessionsWindow"
+					"when": "(azureDevOps:openRepositoryCount != 0) && !isSessionsWindow"
 				},
 				{
 					"command": "azdo.pr.resolveConflict",
@@ -2589,7 +2589,7 @@
 				},
 				{
 					"command": "azdo.pr.acceptMerge",
-					"when": "(isMergeResultEditor && mergeEditorBaseUri =~ /^(azdopr|gitpr):/) && !isSessionsWindow"
+					"when": "(isMergeResultEditor && mergeEditorBaseUri =~ /^(azdopr|azdogitpr):/) && !isSessionsWindow"
 				},
 				{
 					"command": "azdo.issue.openDescription",
@@ -2807,27 +2807,27 @@
 			"view/title": [
 				{
 					"command": "azdo.pr.create",
-					"when": "(gitHubOpenRepositoryCount != 0 && azureDevOps:initialized && view == pr:azureDevOps) && !isSessionsWindow",
+					"when": "(azureDevOps:openRepositoryCount != 0 && azureDevOps:initialized && view == pr:azureDevOps) && !isSessionsWindow",
 					"group": "navigation@1"
 				},
 				{
 					"command": "azdo.pr.refreshList",
-					"when": "(gitHubOpenRepositoryCount != 0 && azureDevOps:initialized && view == pr:azureDevOps) && !isSessionsWindow",
+					"when": "(azureDevOps:openRepositoryCount != 0 && azureDevOps:initialized && view == pr:azureDevOps) && !isSessionsWindow",
 					"group": "navigation@2"
 				},
 				{
 					"command": "azdo.pr.openPullsWebsite",
-					"when": "(gitHubOpenRepositoryCount != 0 && azureDevOps:initialized && view == pr:azureDevOps) && !isSessionsWindow",
+					"when": "(azureDevOps:openRepositoryCount != 0 && azureDevOps:initialized && view == pr:azureDevOps) && !isSessionsWindow",
 					"group": "overflow@1"
 				},
 				{
 					"command": "azdo.pr.checkoutByNumber",
-					"when": "(gitHubOpenRepositoryCount != 0 && azureDevOps:initialized && view == pr:azureDevOps) && !isSessionsWindow",
+					"when": "(azureDevOps:openRepositoryCount != 0 && azureDevOps:initialized && view == pr:azureDevOps) && !isSessionsWindow",
 					"group": "overflow@2"
 				},
 				{
 					"command": "azdo.pr.configurePRViewlet",
-					"when": "(gitHubOpenRepositoryCount != 0 && azureDevOps:initialized && view == pr:azureDevOps) && !isSessionsWindow",
+					"when": "(azureDevOps:openRepositoryCount != 0 && azureDevOps:initialized && view == pr:azureDevOps) && !isSessionsWindow",
 					"group": "overflow@3"
 				},
 				{
@@ -2989,13 +2989,13 @@
 				},
 				{
 					"command": "azdo.pr.openChanges",
-					"when": "(view =~ /(pr|prStatus):github/ && viewItem =~ /(pullrequest|description)/) && !isSessionsWindow",
+					"when": "(view =~ /(pr|prStatus):azureDevOps/ && viewItem =~ /(pullrequest|description)/) && !isSessionsWindow",
 					"group": "2_pullrequest@1"
 				},
 				{
 					"command": "azdo.pr.openDescriptionToTheSide",
 					"group": "2_pullrequest@2",
-					"when": "(view =~ /(pr|prStatus):github/ && viewItem =~ /(pullrequest|description)/) && !isSessionsWindow"
+					"when": "(view =~ /(pr|prStatus):azureDevOps/ && viewItem =~ /(pullrequest|description)/) && !isSessionsWindow"
 				},
 				{
 					"command": "azdo.pr.openPullRequestOnGitHub",
@@ -3034,18 +3034,18 @@
 				},
 				{
 					"command": "azdo.pr.openChanges",
-					"when": "(view =~ /(pr|prStatus):github/ && viewItem =~ /(pullrequest|description)/) && !isSessionsWindow",
+					"when": "(view =~ /(pr|prStatus):azureDevOps/ && viewItem =~ /(pullrequest|description)/) && !isSessionsWindow",
 					"group": "inline@0"
 				},
 				{
 					"command": "azdo.pr.showDiffSinceLastReview",
 					"group": "inline@1",
-					"when": "(view =~ /(pr|prStatus):github/ && viewItem =~ /(pullrequest|description):(active|nonactive):hasChangesSinceReview:showingAllChanges/) && !isSessionsWindow"
+					"when": "(view =~ /(pr|prStatus):azureDevOps/ && viewItem =~ /(pullrequest|description):(active|nonactive):hasChangesSinceReview:showingAllChanges/) && !isSessionsWindow"
 				},
 				{
 					"command": "azdo.pr.showDiffAll",
 					"group": "inline@1",
-					"when": "(view =~ /(pr|prStatus):github/ && viewItem =~ /(pullrequest|description):(active|nonactive):hasChangesSinceReview:showingChangesSinceReview/) && !isSessionsWindow"
+					"when": "(view =~ /(pr|prStatus):azureDevOps/ && viewItem =~ /(pullrequest|description):(active|nonactive):hasChangesSinceReview:showingChangesSinceReview/) && !isSessionsWindow"
 				},
 				{
 					"command": "azdo.notification.chatSummarizeNotification",
@@ -3098,22 +3098,22 @@
 				},
 				{
 					"command": "azdo.pr.openFileOnGitHub",
-					"when": "(view =~ /(pr|prStatus):github/ && viewItem =~ /filechange/) && !isSessionsWindow",
+					"when": "(view =~ /(pr|prStatus):azureDevOps/ && viewItem =~ /filechange/) && !isSessionsWindow",
 					"group": "0_open@0"
 				},
 				{
 					"command": "azdo.pr.revealFileInOS",
-					"when": "(view =~ /(pr|prStatus):github/ && viewItem =~ /filechange(?!:(ADD|DELETE))/) && !isSessionsWindow",
+					"when": "(view =~ /(pr|prStatus):azureDevOps/ && viewItem =~ /filechange(?!:(ADD|DELETE))/) && !isSessionsWindow",
 					"group": "0_open@1"
 				},
 				{
 					"command": "azdo.pr.openOriginalFile",
-					"when": "(view =~ /(pr|prStatus):github/ && viewItem =~ /filechange:(MODIFY|DELETE)/) && !isSessionsWindow",
+					"when": "(view =~ /(pr|prStatus):azureDevOps/ && viewItem =~ /filechange:(MODIFY|DELETE)/) && !isSessionsWindow",
 					"group": "0_open@2"
 				},
 				{
 					"command": "azdo.pr.openModifiedFile",
-					"when": "(view =~ /(pr|prStatus):github/ && viewItem =~ /filechange:MODIFY/) && !isSessionsWindow",
+					"when": "(view =~ /(pr|prStatus):azureDevOps/ && viewItem =~ /filechange:MODIFY/) && !isSessionsWindow",
 					"group": "0_open@3"
 				},
 				{
@@ -3235,37 +3235,37 @@
 				{
 					"command": "azdo.pr.diffOutdatedCommentWithHead",
 					"group": "inline@0",
-					"when": "commentController =~ /^github-(browse|review)/ && commentThread =~ /outdated/"
+					"when": "commentController =~ /^azdo-(browse|review)/ && commentThread =~ /outdated/"
 				},
 				{
 					"command": "azdo.pr.resolveReviewThread",
 					"group": "inline@1",
-					"when": "commentController =~ /^github-(browse|review)/ && commentThread =~ /canResolve/"
+					"when": "commentController =~ /^azdo-(browse|review)/ && commentThread =~ /canResolve/"
 				},
 				{
 					"command": "azdo.pr.unresolveReviewThreadFromView",
 					"group": "inline@1",
-					"when": "commentController =~ /^github-(browse|review)/ && commentThread =~ /canUnresolve/"
+					"when": "commentController =~ /^azdo-(browse|review)/ && commentThread =~ /canUnresolve/"
 				},
 				{
 					"command": "azdo.pr.diffOutdatedCommentWithHead",
 					"group": "context@0",
-					"when": "commentController =~ /^github-(browse|review)/ && commentThread =~ /outdated/"
+					"when": "commentController =~ /^azdo-(browse|review)/ && commentThread =~ /outdated/"
 				},
 				{
 					"command": "azdo.pr.resolveReviewThread",
 					"group": "context@1",
-					"when": "commentController =~ /^github-(browse|review)/ && commentThread =~ /canResolve/"
+					"when": "commentController =~ /^azdo-(browse|review)/ && commentThread =~ /canResolve/"
 				},
 				{
 					"command": "azdo.pr.unresolveReviewThreadFromView",
 					"group": "context@1",
-					"when": "commentController =~ /^github-(browse|review)/ && commentThread =~ /canUnresolve/"
+					"when": "commentController =~ /^azdo-(browse|review)/ && commentThread =~ /canUnresolve/"
 				},
 				{
 					"command": "azdo.pr.applySuggestionWithCopilot",
 					"group": "context@2",
-					"when": "commentController =~ /^github-review/ && !config.chat.disableAIFeatures"
+					"when": "commentController =~ /^azdo-review/ && !config.chat.disableAIFeatures"
 				}
 			],
 			"editor/title": [
@@ -3277,12 +3277,12 @@
 				{
 					"command": "azdo.review.openFile",
 					"group": "navigation",
-					"when": "(resourceScheme =~ /^review$/ && isInDiffEditor) && !isSessionsWindow"
+					"when": "(resourceScheme =~ /^azdo-review$/ && isInDiffEditor) && !isSessionsWindow"
 				},
 				{
 					"command": "azdo.review.openLocalFile",
 					"group": "navigation",
-					"when": "(resourceScheme =~ /^review$/ && !isInDiffEditor) && !isSessionsWindow"
+					"when": "(resourceScheme =~ /^azdo-review$/ && !isInDiffEditor) && !isSessionsWindow"
 				},
 				{
 					"command": "azdo.issue.createIssueFromFile",
@@ -3292,33 +3292,33 @@
 				{
 					"command": "azdo.pr.markFileAsViewed",
 					"group": "navigation",
-					"when": "(resourceScheme != pr && resourceScheme != review && resourceScheme != filechange && resourcePath in azureDevOps:unviewedFiles) && !isSessionsWindow"
+					"when": "(resourceScheme != azdo-pr && resourceScheme != azdo-review && resourceScheme != azdofilechange && resourcePath in azureDevOps:unviewedFiles) && !isSessionsWindow"
 				},
 				{
 					"command": "azdo.pr.unmarkFileAsViewed",
 					"group": "navigation",
-					"when": "(resourceScheme != pr && resourceScheme != review && resourceScheme != filechange && resourcePath in azureDevOps:viewedFiles) && !isSessionsWindow"
+					"when": "(resourceScheme != azdo-pr && resourceScheme != azdo-review && resourceScheme != azdofilechange && resourcePath in azureDevOps:viewedFiles) && !isSessionsWindow"
 				},
 				{
 					"command": "azdo.pr.openDiffViewFromEditor",
 					"group": "navigation",
-					"when": "(!isInDiffEditor && resourceScheme != pr && resourceScheme != review && resourceScheme != filechange && resourcePath in azureDevOps:unviewedFiles) && !isSessionsWindow"
+					"when": "(!isInDiffEditor && resourceScheme != azdo-pr && resourceScheme != azdo-review && resourceScheme != azdofilechange && resourcePath in azureDevOps:unviewedFiles) && !isSessionsWindow"
 				},
 				{
 					"command": "azdo.pr.openDiffViewFromEditor",
 					"group": "navigation",
-					"when": "(!isInDiffEditor && resourceScheme != pr && resourceScheme != review && resourceScheme != filechange && resourcePath in azureDevOps:viewedFiles) && !isSessionsWindow"
+					"when": "(!isInDiffEditor && resourceScheme != azdo-pr && resourceScheme != azdo-review && resourceScheme != azdofilechange && resourcePath in azureDevOps:viewedFiles) && !isSessionsWindow"
 				},
 				{
 					"command": "azdo.pr.addFileComment",
 					"group": "navigation",
-					"when": "(resourceScheme == pr) || (resourcePath in azureDevOps:viewedFiles) || (resourcePath in azureDevOps:unviewedFiles)"
+					"when": "(resourceScheme == azdo-pr) || (resourcePath in azureDevOps:viewedFiles) || (resourcePath in azureDevOps:unviewedFiles)"
 				}
 			],
 			"editor/content": [
 				{
 					"command": "azdo.pr.acceptMerge",
-					"when": "(isMergeResultEditor && mergeEditorBaseUri =~ /^(azdopr|gitpr):/) && !isSessionsWindow"
+					"when": "(isMergeResultEditor && mergeEditorBaseUri =~ /^(azdopr|azdogitpr):/) && !isSessionsWindow"
 				}
 			],
 			"scm/title": [
@@ -3353,34 +3353,34 @@
 				{
 					"command": "azdo.pr.createComment",
 					"group": "inline@1",
-					"when": "(commentController =~ /^github-browse/ && prInDraft) || (commentController =~ /^github-review/ && reviewInDraftMode)"
+					"when": "(commentController =~ /^azdo-browse/ && azureDevOps:prInDraft) || (commentController =~ /^azdo-review/ && azureDevOps:reviewInDraftMode)"
 				},
 				{
 					"command": "azdo.pr.createSingleComment",
 					"group": "inline@1",
-					"when": "config.azureDevOpsPullRequests.defaultCommentType != review && ((commentController =~ /^github-browse/ && !prInDraft) || (commentController =~ /^github-review/ && !reviewInDraftMode))"
+					"when": "config.azureDevOpsPullRequests.defaultCommentType != review && ((commentController =~ /^azdo-browse/ && !azureDevOps:prInDraft) || (commentController =~ /^azdo-review/ && !azureDevOps:reviewInDraftMode))"
 				},
 				{
 					"command": "azdo.pr.startReview",
 					"group": "inline@1",
-					"when": "config.azureDevOpsPullRequests.defaultCommentType == review && ((commentController =~ /^github-browse/ && !prInDraft) || (commentController =~ /^github-review/ && !reviewInDraftMode))"
+					"when": "config.azureDevOpsPullRequests.defaultCommentType == review && ((commentController =~ /^azdo-browse/ && !azureDevOps:prInDraft) || (commentController =~ /^azdo-review/ && !azureDevOps:reviewInDraftMode))"
 				},
 				{
 					"command": "azdo.pr.startReview",
 					"group": "inline@2",
-					"when": "config.azureDevOpsPullRequests.defaultCommentType != review && ((commentController =~ /^github-browse/ && !prInDraft) || (commentController =~ /^github-review/ && !reviewInDraftMode))"
+					"when": "config.azureDevOpsPullRequests.defaultCommentType != review && ((commentController =~ /^azdo-browse/ && !azureDevOps:prInDraft) || (commentController =~ /^azdo-review/ && !azureDevOps:reviewInDraftMode))"
 				},
 				{
 					"command": "azdo.pr.createSingleComment",
 					"group": "inline@2",
-					"when": "config.azureDevOpsPullRequests.defaultCommentType == review && ((commentController =~ /^github-browse/ && !prInDraft) || commentController =~ /^github-review/ && !reviewInDraftMode)"
+					"when": "config.azureDevOpsPullRequests.defaultCommentType == review && ((commentController =~ /^azdo-browse/ && !azureDevOps:prInDraft) || commentController =~ /^azdo-review/ && !azureDevOps:reviewInDraftMode)"
 				}
 			],
 			"comments/comment/editorActions": [
 				{
 					"command": "azdo.pr.makeSuggestion",
 					"group": "inline@3",
-					"when": "commentController =~ /^github-(browse|review)/ && !azureDevOps:activeCommentHasSuggestion"
+					"when": "commentController =~ /^azdo-(browse|review)/ && !azureDevOps:activeCommentHasSuggestion"
 				},
 				{
 					"command": "azdo.pr.uploadFile",
@@ -3392,98 +3392,98 @@
 				{
 					"command": "azdo.pr.resolveReviewThread",
 					"group": "inline@1",
-					"when": "commentController =~ /^github-(browse|review)/ && commentThread =~ /canResolve/"
+					"when": "commentController =~ /^azdo-(browse|review)/ && commentThread =~ /canResolve/"
 				},
 				{
 					"command": "azdo.pr.unresolveReviewThread",
 					"group": "inline@1",
-					"when": "commentController =~ /^github-(browse|review)/ && commentThread =~ /canUnresolve/"
+					"when": "commentController =~ /^azdo-(browse|review)/ && commentThread =~ /canUnresolve/"
 				},
 				{
 					"command": "azdo.pr.openReview",
 					"group": "inline@2",
-					"when": "(commentController =~ /^github-browse/ && prInDraft) || (commentController =~ /^github-review/ && reviewInDraftMode)"
+					"when": "(commentController =~ /^azdo-browse/ && azureDevOps:prInDraft) || (commentController =~ /^azdo-review/ && azureDevOps:reviewInDraftMode)"
 				}
 			],
 			"comments/commentThread/title/context": [
 				{
 					"command": "azdo.pr.resolveReviewThread",
 					"group": "inline@3",
-					"when": "commentController =~ /^github-(browse|review)/ && commentThread =~ /canResolve/"
+					"when": "commentController =~ /^azdo-(browse|review)/ && commentThread =~ /canResolve/"
 				},
 				{
 					"command": "azdo.pr.unresolveReviewThread",
 					"group": "inline@3",
-					"when": "commentController =~ /^github-(browse|review)/ && commentThread =~ /canUnresolve/"
+					"when": "commentController =~ /^azdo-(browse|review)/ && commentThread =~ /canUnresolve/"
 				}
 			],
 			"comments/commentThread/comment/context": [
 				{
 					"command": "azdo.pr.resolveReviewThread",
-					"when": "commentController =~ /^github-(browse|review)/ && commentThread =~ /canResolve/"
+					"when": "commentController =~ /^azdo-(browse|review)/ && commentThread =~ /canResolve/"
 				},
 				{
 					"command": "azdo.pr.unresolveReviewThread",
-					"when": "commentController =~ /^github-(browse|review)/ && commentThread =~ /canUnresolve/"
+					"when": "commentController =~ /^azdo-(browse|review)/ && commentThread =~ /canUnresolve/"
 				},
 				{
 					"command": "azdo.pr.applySuggestion",
-					"when": "commentController =~ /^github-review/ && comment =~ /hasSuggestion/"
+					"when": "commentController =~ /^azdo-review/ && comment =~ /hasSuggestion/"
 				},
 				{
 					"command": "azdo.pr.applySuggestionWithCopilot",
-					"when": "commentController =~ /^github-review/ && !config.chat.disableAIFeatures"
+					"when": "commentController =~ /^azdo-review/ && !config.chat.disableAIFeatures"
 				}
 			],
 			"comments/comment/title": [
 				{
 					"command": "azdo.pr.applySuggestion",
 					"group": "inline@0",
-					"when": "commentController =~ /^github-review/ && comment =~ /hasSuggestion/"
+					"when": "commentController =~ /^azdo-review/ && comment =~ /hasSuggestion/"
 				},
 				{
 					"command": "azdo.pr.applySuggestionWithCopilot",
 					"group": "overflow@0",
-					"when": "commentController =~ /^github-review/ && !config.chat.disableAIFeatures"
+					"when": "commentController =~ /^azdo-review/ && !config.chat.disableAIFeatures"
 				},
 				{
 					"command": "azdo.pr.editComment",
 					"group": "overflow@1",
-					"when": "commentController =~ /^github-(browse|review)/ && comment =~ /canEdit/"
+					"when": "commentController =~ /^azdo-(browse|review)/ && comment =~ /canEdit/"
 				},
 				{
 					"command": "azdo.pr.deleteComment",
 					"group": "overflow@2",
-					"when": "commentController =~ /^github-(browse|review)/ && comment =~ /canDelete/"
+					"when": "commentController =~ /^azdo-(browse|review)/ && comment =~ /canDelete/"
 				},
 				{
 					"command": "azdo.pr.copyCommentLink",
 					"group": "overflow@3",
-					"when": "commentController =~ /^github-(browse|review)/ && comment =~ /canEdit/"
+					"when": "commentController =~ /^azdo-(browse|review)/ && comment =~ /canEdit/"
 				}
 			],
 			"comments/commentThread/title": [
 				{
 					"command": "azdo.pr.refreshComments",
 					"group": "0_refresh@0",
-					"when": "commentController =~ /^github-(browse|review)/"
+					"when": "commentController =~ /^azdo-(browse|review)/"
 				},
 				{
 					"command": "azdo.pr.collapseAllComments",
 					"group": "1_collapse@0",
-					"when": "commentController =~ /^github-(browse|review)/"
+					"when": "commentController =~ /^azdo-(browse|review)/"
 				}
 			],
 			"comments/comment/context": [
 				{
 					"command": "azdo.pr.saveComment",
 					"group": "inline@1",
-					"when": "commentController =~ /^github-(browse|review)/"
+					"when": "commentController =~ /^azdo-(browse|review)/"
 				},
 				{
 					"command": "azdo.pr.cancelEditComment",
 					"group": "inline@2",
-					"when": "commentController =~ /^github-(browse|review)/"
+					"when": "commentController =~ /^azdo-(browse|review)/"
 				}
 			],
 			"editor/context/copy": [
@@ -3584,7 +3584,7 @@
 			"editor/title/context": [
 				{
 					"command": "azdo.pr.closeRelatedEditors",
-					"when": "(resourceScheme == 'pr' || resourceScheme == 'review' || resourcePath in azureDevOps:unviewedFiles || resourcePath in azureDevOps:viewedFiles) && !isSessionsWindow",
+					"when": "(resourceScheme == 'azdo-pr' || resourceScheme == 'azdo-review' || resourcePath in azureDevOps:unviewedFiles || resourcePath in azureDevOps:viewedFiles) && !isSessionsWindow",
 					"group": "1_close@60"
 				}
 			],

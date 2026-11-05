@@ -1202,7 +1202,7 @@ export class PullRequestModel extends IssueModel<PullRequest> implements IPullRe
 
 	private async updateDraftModeContext() {
 		if (this.isActive) {
-			await vscode.commands.executeCommand('setContext', 'reviewInDraftMode', this.hasPendingReview);
+			await vscode.commands.executeCommand('setContext', 'azureDevOps:reviewInDraftMode', this.hasPendingReview);
 		}
 	}
 

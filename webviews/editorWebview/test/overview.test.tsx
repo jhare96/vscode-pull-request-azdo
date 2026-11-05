@@ -11,6 +11,7 @@ import { cleanup, fireEvent, render, wait, waitForElement } from 'react-testing-
 import { createSandbox, SinonSandbox } from 'sinon';
 
 import { PullRequestBuilder } from './builder/pullRequest';
+import { CommentEvent, EventType, ReviewEvent } from '../../../src/common/timelineEvent';
 import { CheckState, GithubItemStateEnum, PullRequestCheckStatus, PullRequestMergeability } from '../../../src/github/interface';
 import { Root as ActivityBarRoot } from '../../activityBarView/app';
 import { Overview as ActivityBarOverview } from '../../activityBarView/overview';
@@ -42,6 +43,70 @@ describe('Overview', function () {
 
 		assert(out.container.querySelector('.title'));
 		assert(out.container.querySelector('.overview-title'));
+	});
+
+	for (const isIssue of [false, true]) {
+		it(`shows ${isIssue ? 'issue comments oldest first' : 'PR comments newest first'} without reordering the model`, function () {
+			const pr = new PullRequestBuilder().isIssue(isIssue).build();
+			const comments: CommentEvent[] = [1, 2, 3].map(id => ({
+				id, event: EventType.Commented, graphNodeId: `comment-${id}`, htmlUrl: '',
+				body: `Comment ${id}`, bodyHTML: `<p>Comment ${id}</p>`, user: pr.author,
+				createdAt: `2026-11-0${id}T12:00:00Z`,
+			}));
+			pr.events = comments;
+			const out = render(
+				<PullRequestContext.Provider value={new PRContext(pr)}>
+					<Overview {...pr} />
+				</PullRequestContext.Provider>,
+			);
+			const bodies = () => [...out.container.querySelectorAll('#main .comment-body')]
+				.map(body => body.textContent?.trim());
+			assert.deepStrictEqual(bodies(), [
+				'the default body',
+				...(isIssue ? ['Comment 1', 'Comment 2', 'Comment 3'] : ['Comment 3', 'Comment 2', 'Comment 1']),
+			]);
+			assert.deepStrictEqual(comments.map(comment => comment.id), [1, 2, 3]);
+
+			const latest: CommentEvent = {
+				...comments[2], id: 4, graphNodeId: 'comment-4', body: 'Comment 4',
+				bodyHTML: '<p>Comment 4</p>', createdAt: '2026-11-04T12:00:00Z',
+			};
+			const updated = { ...pr, events: [...comments, latest] };
+			out.rerender(
+				<PullRequestContext.Provider value={new PRContext(updated)}>
+					<Overview {...updated} />
+				</PullRequestContext.Provider>,
+			);
+			assert.deepStrictEqual(bodies(), [
+				'the default body',
+				...(isIssue ? ['Comment 1', 'Comment 2', 'Comment 3', 'Comment 4'] : ['Comment 4', 'Comment 3', 'Comment 2', 'Comment 1']),
+			]);
+		});
+	}
+
+	it('shows newer reviews first while preserving the order of replies within each thread', function () {
+		const pr = new PullRequestBuilder().build();
+		const review: ReviewEvent = {
+			id: 1, event: EventType.Reviewed, submittedAt: '2026-11-01T12:00:00Z',
+			body: 'Older review', bodyHTML: '<p>Older review</p>', htmlUrl: '', user: pr.author, authorAssociation: '',
+			comments: [1, 2].map(id => ({
+				id, graphNodeId: `reply-${id}`, threadId: 'thread-1', diffHunk: '', url: '', htmlUrl: '',
+				body: `Reply ${id}`, bodyHTML: `<p>Reply ${id}</p>`, user: pr.author,
+				createdAt: `2026-11-0${id}T12:00:00Z`,
+			})),
+		};
+		pr.events = [
+			review,
+			{ ...review, id: 2, submittedAt: '2026-11-03T12:00:00Z', body: 'Newer review', bodyHTML: '<p>Newer review</p>', comments: [] },
+		];
+		const out = render(
+			<PullRequestContext.Provider value={new PRContext(pr)}>
+				<Overview {...pr} />
+			</PullRequestContext.Provider>,
+		);
+		assert.ok(out.getByText('Newer review').compareDocumentPosition(out.getByText('Older review')) & Node.DOCUMENT_POSITION_FOLLOWING);
+		assert.ok(out.getByText('Reply 1').compareDocumentPosition(out.getByText('Reply 2')) & Node.DOCUMENT_POSITION_FOLLOWING);
+		assert.deepStrictEqual(review.comments.map(comment => comment.id), [1, 2]);
 	});
 
 	it('opens PR number links on GitHub', function () {

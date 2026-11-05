@@ -446,8 +446,9 @@ export class AzureClient {
 			comments: [{ parentCommentId: 0, content, commentType: 1 }],
 			status: 1,
 			threadContext,
+			// Azure DevOps it 1-index based
 			pullRequestThreadContext: iteration === undefined ? undefined : {
-				changeTrackingId, iterationContext: { firstComparingIteration: 0, secondComparingIteration: iteration },
+				changeTrackingId, iterationContext: { firstComparingIteration: iteration, secondComparingIteration: iteration },
 			},
 		});
 	}

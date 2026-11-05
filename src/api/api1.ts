@@ -142,7 +142,7 @@ export class GitApiImpl extends Disposable implements API, IGit {
 		const reposCount = Array.from(this._providers.values()).reduce((prev, current) => {
 			return prev + current.repositories.length;
 		}, 0);
-		vscode.commands.executeCommand('setContext', 'gitHubOpenRepositoryCount', reposCount);
+		vscode.commands.executeCommand('setContext', 'azureDevOps:openRepositoryCount', reposCount);
 	}
 
 	registerGitProvider(provider: IGit): vscode.Disposable {

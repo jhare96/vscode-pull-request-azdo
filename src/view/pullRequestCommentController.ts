@@ -32,7 +32,7 @@ import {
 
 export class PullRequestCommentController extends CommentControllerBase implements CommentHandler, CommentReactionHandler {
 	private static ID = 'PullRequestCommentController';
-	static readonly PREFIX = 'github-browse';
+	static readonly PREFIX = 'azdo-browse';
 
 	private _pendingCommentThreadAdds: GHPRCommentThread[] = [];
 	private _commentHandlerId: string;
@@ -584,7 +584,7 @@ export class PullRequestCommentController extends CommentControllerBase implemen
 	}
 
 	private setContextKey(inDraftMode: boolean): void {
-		vscode.commands.executeCommand('setContext', 'prInDraft', inDraftMode);
+		vscode.commands.executeCommand('setContext', 'azureDevOps:prInDraft', inDraftMode);
 	}
 
 	private removeAllCommentsThreads(): void {
