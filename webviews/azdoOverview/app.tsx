@@ -249,8 +249,7 @@ function RefreshButton({ reload }: { reload: () => Promise<void> }) {
 		tooltipProps={{ text: 'Reload this pull request from Azure DevOps' }} />;
 }
 
-/** Mirrors the original checkout control, but checking out creates a worktree and opens it in a new window. */
-function CheckoutButton({ pr }: { pr: PullRequest }) {
+export function CheckoutButton({ pr }: { pr: PullRequest }) {
 	const ctx = useContext(PullRequestContext);
 	const [busy, setBusy] = useState(false);
 	const run = (action: () => Promise<unknown>) => async () => {
@@ -274,7 +273,7 @@ function CheckoutButton({ pr }: { pr: PullRequest }) {
 		disabled={busy}
 		buttonProps={pr.isCurrentlyCheckedOut
 			? { text: `Checkout '${pr.doneCheckoutBranch}'`, iconProps: { iconName: 'BranchPullRequest' }, onClick: () => { void run(() => ctx.exitReviewMode())(); } }
-			: { text: 'Checkout', iconProps: { iconName: 'BranchPullRequest' }, onClick: () => { void worktree(); } }}
+			: { text: 'Checkout', iconProps: { iconName: 'BranchPullRequest' }, onClick: () => { void run(() => ctx.checkout())(); } }}
 		menuButtonProps={{ ariaLabel: 'More checkout options', contextualMenuProps: { menuProps: { id: 'azdo-checkout', items } } }}
 	/>;
 }

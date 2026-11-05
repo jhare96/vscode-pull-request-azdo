@@ -4,6 +4,7 @@
 
 ### Fixes
 
+- Make the main Checkout button switch to the pull request branch in the current window; keep worktree checkout as an explicit dropdown action. https://github.com/jhare96/vscode-pull-request-azdo/issues/13
 - Fix posting inline review comments using Azure DevOps iteration contexts.
 - Remove duplicate comment actions and isolate comment controllers and context keys from the GitHub Pull Requests extension.
 - Restore pull request menu actions and keyboard shortcuts with Azure DevOps view identifiers and document schemes.

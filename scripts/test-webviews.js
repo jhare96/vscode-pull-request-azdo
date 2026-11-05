@@ -21,8 +21,11 @@ async function main() {
 	config.entry = [path.join(root, 'src', 'test', 'webviews', 'setup.ts'), ...tests];
 	config.target = 'node';
 	config.output = { path: path.join(root, 'out', 'webview-tests'), filename: 'index.js' };
+	config.module.rules = config.module.rules.map(rule => rule.test?.test('.css')
+		? { test: rule.test, type: 'asset/source' }
+		: rule);
 	config.externals = [({ request }, callback) => {
-		if (!request.startsWith('.') && !path.isAbsolute(request)) {
+		if (!request.startsWith('.') && !path.isAbsolute(request) && !request.startsWith('azure-devops-ui/') && !request.includes('!')) {
 			callback(null, 'commonjs ' + request);
 		} else {
 			callback();
