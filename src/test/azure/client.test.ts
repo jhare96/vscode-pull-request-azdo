@@ -282,7 +282,7 @@ describe('Azure DevOps REST client', () => {
 		await client.createThread(42, 'Comment', context, 3, 7);
 		assert.deepStrictEqual(body(), {
 			comments: [{ parentCommentId: 0, content: 'Comment', commentType: 1 }], status: 1, threadContext: context,
-			pullRequestThreadContext: { changeTrackingId: 7, iterationContext: { firstComparingIteration: 0, secondComparingIteration: 3 } },
+			pullRequestThreadContext: { changeTrackingId: 7, iterationContext: { firstComparingIteration: 3, secondComparingIteration: 3 } },
 		});
 	});
 
@@ -455,10 +455,12 @@ describe('Azure DevOps REST client', () => {
 	});
 
 	it('collects build timeline issues', async () => {
-		const { client } = fixture([json({ records: [
-			{ name: 'Validate', issues: [{ type: 'error', message: 'Bash exited with code 1.' }, { type: 'warning', message: 'Slow' }] },
-			{ name: 'Setup' },
-		] })]);
+		const { client } = fixture([json({
+			records: [
+				{ name: 'Validate', issues: [{ type: 'error', message: 'Bash exited with code 1.' }, { type: 'warning', message: 'Slow' }] },
+				{ name: 'Setup' },
+			]
+		})]);
 		assert.deepStrictEqual(await client.buildIssues(7), [
 			{ type: 'error', message: 'Bash exited with code 1.', recordName: 'Validate' },
 			{ type: 'warning', message: 'Slow', recordName: 'Validate' },
