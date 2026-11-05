@@ -180,6 +180,24 @@ function isCrossChatSessionWithPR(value: any): value is CrossChatSessionWithPR {
 	return !!asCrossChatSessionWithPR.pullRequestDetails;
 }
 
+export async function refreshComments(reposManager: RepositoriesManager): Promise<void> {
+	for (const folderManager of reposManager.folderManagers) {
+		for (const githubRepository of folderManager.gitHubRepositories) {
+			for (const pullRequest of githubRepository.pullRequestModels) {
+				if (pullRequest.isResolved() && pullRequest.reviewThreadsCacheReady) {
+					try {
+						await pullRequest.initializeReviewThreadCache();
+					} catch (error) {
+						const message = vscode.l10n.t('Unable to refresh comments for pull request #{0}: {1}', pullRequest.number, formatError(error));
+						Logger.error(message, 'RefreshComments');
+						void vscode.window.showErrorMessage(message);
+					}
+				}
+			}
+		}
+	}
+}
+
 export function registerCommands(
 	context: vscode.ExtensionContext,
 	reposManager: RepositoriesManager,
@@ -2343,17 +2361,7 @@ ${contents}
 			goToNextPrevDiff(diffs, false);
 		}));
 
-	context.subscriptions.push(vscode.commands.registerCommand('azdo.pr.refreshComments', async () => {
-		for (const folderManager of reposManager.folderManagers) {
-			for (const githubRepository of folderManager.gitHubRepositories) {
-				for (const pullRequest of githubRepository.pullRequestModels) {
-					if (pullRequest.isResolved() && pullRequest.reviewThreadsCacheReady) {
-						pullRequest.initializeReviewThreadCache();
-					}
-				}
-			}
-		}
-	}));
+	context.subscriptions.push(vscode.commands.registerCommand('azdo.pr.refreshComments', () => refreshComments(reposManager)));
 
 	context.subscriptions.push(
 		vscode.commands.registerCommand('azdo.pr.closeRelatedEditors', closeAllPrAndReviewEditors)

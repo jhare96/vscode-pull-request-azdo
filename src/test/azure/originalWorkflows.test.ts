@@ -10,7 +10,9 @@ import * as vscode from 'vscode';
 import { GitApiImpl } from '../../api/api1';
 import { AzureClient, PullRequest as AzurePullRequest, ReviewThread } from '../../azure/client';
 import { AzureSessions } from '../../azure/sessions';
+import { refreshComments } from '../../commands';
 import { DiffSide } from '../../common/comment';
+import Logger from '../../common/logger';
 import { InMemFileChange } from '../../common/file';
 import { EXTENSION_ID } from '../../constants';
 import { CredentialStore } from '../../github/credentials';
@@ -347,6 +349,70 @@ describe('Original application workflows backed by Azure DevOps', function () {
 		assert.deepStrictEqual(server.threads.map(thread => thread.comments[0].content), ['Immediate']);
 		assert.deepStrictEqual(server.votes, []);
 		assert.strictEqual(await pullRequest.getPendingReviewId(), undefined);
+	});
+
+	it('refreshes and posts comments through the same live Azure PR model after overnight inactivity', async function () {
+		const pullRequest = await model();
+		await pullRequest.initializeReviewThreadCache();
+		const disposed = sandbox.spy(pullRequest, 'dispose');
+		const changed = sandbox.spy();
+		pullRequest.onDidChange(changed);
+		const clock = sandbox.useFakeTimers({ toFake: ['Date'] });
+		clock.tick(1000 * 60 * 60 * 12);
+
+		assert.strictEqual(manager.gitHubRepositories[0].getExistingPullRequestModel(42), pullRequest);
+		await pullRequest.initializeReviewThreadCache();
+		await pullRequest.createReviewThread('After overnight inactivity', 'src/file.ts', 1, 1, DiffSide.RIGHT, true);
+
+		assert.strictEqual(manager.gitHubRepositories[0].getExistingPullRequestModel(42), pullRequest);
+		assert.deepStrictEqual(server.threads.map(thread => thread.comments[0].content), ['After overnight inactivity']);
+		assert.strictEqual(pullRequest.reviewThreadsCache[0].comments[0].body, 'After overnight inactivity');
+		sandbox.assert.notCalled(disposed);
+		sandbox.assert.called(changed);
+	});
+
+	it('waits for comment refreshes to complete', async function () {
+		const pullRequest = await model();
+		await pullRequest.initializeReviewThreadCache();
+		let finishRefresh: () => void;
+		const refresh = sandbox.stub(pullRequest, 'initializeReviewThreadCache')
+			.returns(new Promise(resolve => { finishRefresh = () => resolve([]); }));
+		let finished = false;
+		const pending = refreshComments(repositories).then(() => { finished = true; });
+		await Promise.resolve();
+		sandbox.assert.calledOnce(refresh);
+		assert.strictEqual(finished, false);
+		finishRefresh();
+		await pending;
+		assert.strictEqual(finished, true);
+	});
+
+	it('reports comment refresh failures and continues refreshing other PRs', async function () {
+		const pullRequest = await model();
+		await pullRequest.initializeReviewThreadCache();
+		sandbox.stub(pullRequest, 'initializeReviewThreadCache').rejects(new Error('Azure unavailable'));
+		const second = manager.gitHubRepositories[0].createOrUpdatePullRequestModel({ ...pullRequest.item, number: 43 });
+		sandbox.stub(second, 'reviewThreadsCacheReady').get(() => true);
+		const secondRefresh = sandbox.stub(second, 'initializeReviewThreadCache').resolves([]);
+		const notify = sandbox.stub(vscode.window, 'showErrorMessage').resolves();
+		const log = sandbox.stub(Logger, 'error');
+
+		await refreshComments(repositories);
+
+		sandbox.assert.calledOnce(notify);
+		assert.deepStrictEqual(notify.firstCall.args, ['Unable to refresh comments for pull request #42: Azure unavailable']);
+		assert.ok(log.calledOnceWithExactly('Unable to refresh comments for pull request #42: Azure unavailable', 'RefreshComments'));
+		sandbox.assert.calledOnce(secondRefresh);
+	});
+
+	it('skips PRs whose comment caches have not been initialized', async function () {
+		const pullRequest = await model();
+		sandbox.stub(pullRequest, 'reviewThreadsCacheReady').get(() => false);
+		const refresh = sandbox.spy(pullRequest, 'initializeReviewThreadCache');
+
+		await refreshComments(repositories);
+
+		sandbox.assert.notCalled(refresh);
 	});
 
 	it('does not publish drafts or vote after the source changes during review', async function () {

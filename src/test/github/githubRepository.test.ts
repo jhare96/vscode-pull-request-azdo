@@ -235,6 +235,33 @@ describe('GitHubRepository', function () {
 			sinon.assert.calledOnce(query);
 		});
 
+		it('retains the live PR model and its events after more than four hours of inactivity', async function () {
+			const query = sinon.stub(repo, 'query').resolves({
+				data: new GraphQLPullRequestBuilder().build(),
+				loading: false, stale: false, networkStatus: NetworkStatus.ready,
+			});
+			const clock = sinon.useFakeTimers({ toFake: ['Date'] });
+			const model = await repo.getPullRequest(1347, 'test', false, false, 'overview');
+			assert.ok(model);
+			const disposed = sinon.spy(model, 'dispose');
+			const changed = sinon.spy();
+			model.onDidChange(changed);
+
+			clock.tick(1000 * 60 * 60 * 5);
+
+			assert.strictEqual(repo.getExistingPullRequestModel(1347), model);
+			assert.strictEqual(await repo.getPullRequest(1347, 'test', false, false, 'overview'), model);
+			assert.deepStrictEqual(repo.pullRequestModels, [model]);
+			assert.strictEqual(query.callCount, 2);
+			sinon.assert.notCalled(disposed);
+			model.update({ ...model.item, title: 'Updated after inactivity' });
+			sinon.assert.calledOnce(changed);
+
+			repo.dispose();
+			sinon.assert.calledOnce(disposed);
+			assert.strictEqual(repo.getExistingPullRequestModel(1347), undefined);
+		});
+
 		it('preserves number validation and update checks for default loads', async function () {
 			const query = sinon.stub(repo, 'query').resolves({
 				data: new GraphQLPullRequestBuilder().build(),
