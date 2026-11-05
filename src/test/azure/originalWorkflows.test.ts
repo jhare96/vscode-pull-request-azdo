@@ -374,7 +374,7 @@ describe('Original application workflows backed by Azure DevOps', function () {
 	it('waits for comment refreshes to complete', async function () {
 		const pullRequest = await model();
 		await pullRequest.initializeReviewThreadCache();
-		let finishRefresh: () => void;
+		let finishRefresh!: () => void;
 		const refresh = sandbox.stub(pullRequest, 'initializeReviewThreadCache')
 			.returns(new Promise(resolve => { finishRefresh = () => resolve([]); }));
 		let finished = false;
