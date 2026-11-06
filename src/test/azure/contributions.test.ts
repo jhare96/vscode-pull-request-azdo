@@ -9,6 +9,8 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 import { EXTENSION_ID } from '../../constants';
 import { Schemes } from '../../common/uri';
+import { PullRequestCommentController } from '../../view/pullRequestCommentController';
+import { ReviewCommentController } from '../../view/reviewCommentController';
 
 const extension = vscode.extensions.getExtension(EXTENSION_ID);
 if (!extension) {
@@ -62,6 +64,105 @@ describe('Standalone fork contributions', () => {
 		assert.strictEqual(Schemes.Review, 'azdo-review');
 		assert.strictEqual(Schemes.CheckRunLog, 'azdocheckrunlog');
 		assert.ok(manifest.activationEvents.includes(`onFileSystem:${Schemes.NewIssue}`));
+	});
+
+	it('uses the Azure controller prefixes and draft context for comment commands', () => {
+		assert.strictEqual(PullRequestCommentController.PREFIX, 'azdo-browse');
+		assert.strictEqual(ReviewCommentController.PREFIX, 'azdo-review');
+		const menus = manifest.contributes.menus as Record<string, { command: string; when?: string }[]>;
+		const commentActions = Object.entries(menus)
+			.filter(([menu]) => menu.startsWith('comments/'))
+			.flatMap(([, actions]) => actions);
+		assert.ok(commentActions.every(action => !action.when?.includes('github-')));
+		assert.ok(commentActions.every(action => !/(^|[^:\w])reviewInDraftMode\b/.test(action.when ?? '')));
+		const draftActions = [
+			...menus['comments/commentThread/context'],
+			...menus['comments/commentThread/additionalActions'].filter(action => action.command === 'azdo.pr.openReview'),
+		];
+		assert.strictEqual(draftActions.length, 6);
+		for (const action of draftActions) {
+			assert.ok(action.when?.includes(`commentController =~ /^${PullRequestCommentController.PREFIX}/ && `), action.command);
+			assert.ok(action.when?.includes(`commentController =~ /^${ReviewCommentController.PREFIX}/ && `), action.command);
+			assert.ok(action.when?.includes('azureDevOps:prInDraft'), action.command);
+			assert.ok(action.when?.includes('azureDevOps:reviewInDraftMode'), action.command);
+		}
+	});
+
+	it('matches Azure tree views for command menus and the reveal shortcut', () => {
+		const menus = manifest.contributes.menus as Record<string, { command: string; when?: string }[]>;
+		const keybindings = manifest.contributes.keybindings as { command: string; when: string }[];
+		const actions = [
+			...menus['view/item/context'].filter(action => action.when?.includes('view =~')),
+			...keybindings.filter(action => action.command === 'azdo.pr.revealFileInOS'),
+		];
+		assert.strictEqual(actions.length, 10);
+		const views = Object.values(manifest.contributes.views).flat() as { id: string }[];
+		for (const action of actions) {
+			const match = /(?:view|focusedView) =~ \/(?<pattern>[^/]+)\//.exec(action.when ?? '');
+			assert.ok(match?.groups?.pattern, action.command);
+			const pattern = new RegExp(match.groups.pattern);
+			for (const view of ['pr:azureDevOps', 'prStatus:azureDevOps']) {
+				assert.ok(views.some(entry => entry.id === view), view);
+				assert.ok(pattern.test(view), `${action.command}: ${view}`);
+			}
+			assert.ok(!pattern.test('pr:github'), action.command);
+			assert.ok(!pattern.test('prStatus:github'), action.command);
+			assert.ok(!pattern.test('issues:azureDevOps'), action.command);
+		}
+	});
+
+	it('uses the document provider schemes in editor command conditions', () => {
+		const menus = manifest.contributes.menus as Record<string, { command: string; when?: string }[]>;
+		const exclusions = `resourceScheme != ${Schemes.Pr} && resourceScheme != ${Schemes.Review} && resourceScheme != ${Schemes.FileChange}`;
+		const expected = [
+			['azdo.review.openFile', `(resourceScheme =~ /^${Schemes.Review}$/ && isInDiffEditor) && !isSessionsWindow`],
+			['azdo.review.openLocalFile', `(resourceScheme =~ /^${Schemes.Review}$/ && !isInDiffEditor) && !isSessionsWindow`],
+			['azdo.pr.markFileAsViewed', `(${exclusions} && resourcePath in azureDevOps:unviewedFiles) && !isSessionsWindow`],
+			['azdo.pr.unmarkFileAsViewed', `(${exclusions} && resourcePath in azureDevOps:viewedFiles) && !isSessionsWindow`],
+			['azdo.pr.openDiffViewFromEditor', `(!isInDiffEditor && ${exclusions} && resourcePath in azureDevOps:unviewedFiles) && !isSessionsWindow`],
+			['azdo.pr.openDiffViewFromEditor', `(!isInDiffEditor && ${exclusions} && resourcePath in azureDevOps:viewedFiles) && !isSessionsWindow`],
+			['azdo.pr.addFileComment', `(resourceScheme == ${Schemes.Pr}) || (resourcePath in azureDevOps:viewedFiles) || (resourcePath in azureDevOps:unviewedFiles)`],
+			['azdo.pr.closeRelatedEditors', `(resourceScheme == '${Schemes.Pr}' || resourceScheme == '${Schemes.Review}' || resourcePath in azureDevOps:unviewedFiles || resourcePath in azureDevOps:viewedFiles) && !isSessionsWindow`],
+		];
+		const actions = [...menus['editor/title'], ...menus['editor/title/context']]
+			.filter(action => action.when?.includes('resourceScheme'));
+		assert.strictEqual(actions.length, expected.length);
+		for (const [command, when] of expected) {
+			assert.ok(actions.some(action => action.command === command && action.when === when), `${command}: ${when}`);
+		}
+	});
+
+	it('matches both merge editor providers without accepting legacy schemes', () => {
+		const menus = manifest.contributes.menus as Record<string, { command: string; when?: string }[]>;
+		const actions = Object.values(menus).flat().filter(action => action.command === 'azdo.pr.acceptMerge');
+		assert.strictEqual(actions.length, 2);
+		for (const action of actions) {
+			const match = /mergeEditorBaseUri =~ \/(?<pattern>[^/]+)\//.exec(action.when ?? '');
+			assert.ok(match?.groups?.pattern);
+			const pattern = new RegExp(match.groups.pattern);
+			for (const scheme of [Schemes.GithubPr, Schemes.GitPr]) {
+				assert.ok(pattern.test(`${scheme}:/file.ts`), scheme);
+			}
+			for (const scheme of ['githubpr', 'gitpr', 'file']) {
+				assert.ok(!pattern.test(`${scheme}:/file.ts`), scheme);
+			}
+			assert.ok(action.when?.includes('isMergeResultEditor'));
+			assert.ok(action.when?.includes('!isSessionsWindow'));
+		}
+	});
+
+	it('uses independent repository, draft and issue creation context keys', () => {
+		const contributions = JSON.stringify(manifest.contributes);
+		assert.ok(!contributions.includes('gitHubOpenRepositoryCount'));
+		assert.ok(!/(^|[^:\w])prInDraft\b/.test(contributions));
+		assert.ok(!contributions.includes('issues.creatingFromFile'));
+		const menus = manifest.contributes.menus as Record<string, { when?: string }[]>;
+		const repositoryActions = Object.values(menus).flat()
+			.filter(action => action.when?.includes('azureDevOps:openRepositoryCount'));
+		assert.strictEqual(repositoryActions.length, 18);
+		const commands = manifest.contributes.commands as { command: string; enablement?: string }[];
+		assert.strictEqual(commands.find(command => command.command === 'azdo.issue.createIssueFromFile')?.enablement,
+			'!azureDevOps:creatingIssueFromFile');
 	});
 
 	it('uses independent repository state for sign-in views and welcome messages', () => {

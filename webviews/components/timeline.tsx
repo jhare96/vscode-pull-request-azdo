@@ -70,7 +70,8 @@ export const Timeline = ({ events, isIssue }: { events: TimelineEvent[], isIssue
 		}
 	}
 
-	return <>{consolidatedEvents.map(event => {
+	const displayEvents = isIssue ? consolidatedEvents : consolidatedEvents.reverse();
+	return <>{displayEvents.map(event => {
 		switch (event.event) {
 			case EventType.Committed:
 				return <CommitEventView key={`commit${event.id}`} {...event} />;

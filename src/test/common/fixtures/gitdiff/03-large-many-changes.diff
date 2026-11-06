@@ -53,19 +53,19 @@ index 51efe28a..4928a2ba 100644
  				"command": "review.requestChangesDescription",
  				"title": "%command.review.requestChanges.title%",
 @@ -2495,6 +2483,18 @@
- 					"when": "commentController =~ /^github-(browse|review)/"
+ 					"when": "commentController =~ /^azdo-(browse|review)/"
  				}
  			],
 +			"comments/comment2/context": [
 +				{
 +					"command": "pr.saveComment",
 +					"group": "inline@1",
-+					"when": "commentController =~ /^github-(browse|review)/"
++					"when": "commentController =~ /^azdo-(browse|review)/"
 +				},
 +				{
 +					"command": "pr.cancelEditComment",
 +					"group": "inline@2",
-+					"when": "commentController =~ /^github-(browse|review)/"
++					"when": "commentController =~ /^azdo-(browse|review)/"
 +				}
 +			],
  			"editor/context/copy": [

@@ -73,7 +73,7 @@ import { ReviewManager } from '../view/reviewManager';
 import { ReviewsManager } from '../view/reviewsManager';
 import { PRNode } from '../view/treeNodes/pullRequestNode';
 
-const CREATING_ISSUE_FROM_FILE_CONTEXT = 'issues.creatingFromFile';
+const CREATING_ISSUE_FROM_FILE_CONTEXT = 'azureDevOps:creatingIssueFromFile';
 
 export class IssueFeatureRegistrar extends Disposable {
 	private static readonly ID = 'IssueFeatureRegistrar';

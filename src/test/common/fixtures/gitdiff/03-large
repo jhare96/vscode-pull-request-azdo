@@ -2290,32 +2290,32 @@
 				{
 					"command": "pr.diffOutdatedCommentWithHead",
 					"group": "inline@0",
-					"when": "commentController =~ /^github-(browse|review)/ && commentThread =~ /outdated/"
+					"when": "commentController =~ /^azdo-(browse|review)/ && commentThread =~ /outdated/"
 				},
 				{
 					"command": "pr.resolveReviewThread",
 					"group": "inline@1",
-					"when": "commentController =~ /^github-(browse|review)/ && commentThread =~ /canResolve/"
+					"when": "commentController =~ /^azdo-(browse|review)/ && commentThread =~ /canResolve/"
 				},
 				{
 					"command": "pr.unresolveReviewThread",
 					"group": "inline@1",
-					"when": "commentController =~ /^github-(browse|review)/ && commentThread =~ /canUnresolve/"
+					"when": "commentController =~ /^azdo-(browse|review)/ && commentThread =~ /canUnresolve/"
 				},
 				{
 					"command": "pr.diffOutdatedCommentWithHead",
 					"group": "context@0",
-					"when": "commentController =~ /^github-(browse|review)/ && commentThread =~ /outdated/"
+					"when": "commentController =~ /^azdo-(browse|review)/ && commentThread =~ /outdated/"
 				},
 				{
 					"command": "pr.resolveReviewThread",
 					"group": "context@1",
-					"when": "commentController =~ /^github-(browse|review)/ && commentThread =~ /canResolve/"
+					"when": "commentController =~ /^azdo-(browse|review)/ && commentThread =~ /canResolve/"
 				},
 				{
 					"command": "pr.unresolveReviewThread",
 					"group": "context@1",
-					"when": "commentController =~ /^github-(browse|review)/ && commentThread =~ /canUnresolve/"
+					"when": "commentController =~ /^azdo-(browse|review)/ && commentThread =~ /canUnresolve/"
 				}
 			],
 			"editor/title": [
@@ -2403,19 +2403,19 @@
 				{
 					"command": "pr.makeSuggestion",
 					"group": "inline@3",
-					"when": "commentController =~ /^github-(browse|review)/"
+					"when": "commentController =~ /^azdo-(browse|review)/"
 				}
 			],
 			"comments/commentThread/additionalActions": [
 				{
 					"command": "pr.resolveReviewThread",
 					"group": "inline@1",
-					"when": "commentController =~ /^github-(browse|review)/ && commentThread =~ /canResolve/"
+					"when": "commentController =~ /^azdo-(browse|review)/ && commentThread =~ /canResolve/"
 				},
 				{
 					"command": "pr.unresolveReviewThread",
 					"group": "inline@1",
-					"when": "commentController =~ /^github-(browse|review)/ && commentThread =~ /canUnresolve/"
+					"when": "commentController =~ /^azdo-(browse|review)/ && commentThread =~ /canUnresolve/"
 				},
 				{
 					"command": "pr.openReview",
@@ -2427,22 +2427,22 @@
 				{
 					"command": "pr.resolveReviewThread",
 					"group": "inline@3",
-					"when": "commentController =~ /^github-(browse|review)/ && commentThread =~ /canResolve/"
+					"when": "commentController =~ /^azdo-(browse|review)/ && commentThread =~ /canResolve/"
 				},
 				{
 					"command": "pr.unresolveReviewThread",
 					"group": "inline@3",
-					"when": "commentController =~ /^github-(browse|review)/ && commentThread =~ /canUnresolve/"
+					"when": "commentController =~ /^azdo-(browse|review)/ && commentThread =~ /canUnresolve/"
 				}
 			],
 			"comments/commentThread/comment/context": [
 				{
 					"command": "pr.resolveReviewThread",
-					"when": "commentController =~ /^github-(browse|review)/ && commentThread =~ /canResolve/"
+					"when": "commentController =~ /^azdo-(browse|review)/ && commentThread =~ /canResolve/"
 				},
 				{
 					"command": "pr.unresolveReviewThread",
-					"when": "commentController =~ /^github-(browse|review)/ && commentThread =~ /canUnresolve/"
+					"when": "commentController =~ /^azdo-(browse|review)/ && commentThread =~ /canUnresolve/"
 				},
 				{
 					"command": "pr.applySuggestion",
@@ -2453,7 +2453,7 @@
 				{
 					"command": "pr.copyCommentLink",
 					"group": "inline@1",
-					"when": "commentController =~ /^github-(browse|review)/ && comment =~ /canEdit/"
+					"when": "commentController =~ /^azdo-(browse|review)/ && comment =~ /canEdit/"
 				},
 				{
 					"command": "pr.applySuggestion",
@@ -2463,36 +2463,36 @@
 				{
 					"command": "pr.editComment",
 					"group": "inline@2",
-					"when": "commentController =~ /^github-(browse|review)/ && comment =~ /canEdit/"
+					"when": "commentController =~ /^azdo-(browse|review)/ && comment =~ /canEdit/"
 				},
 				{
 					"command": "pr.deleteComment",
 					"group": "inline@3",
-					"when": "commentController =~ /^github-(browse|review)/ && comment =~ /canDelete/"
+					"when": "commentController =~ /^azdo-(browse|review)/ && comment =~ /canDelete/"
 				}
 			],
 			"comments/commentThread/title": [
 				{
 					"command": "pr.refreshComments",
 					"group": "0_refresh@0",
-					"when": "commentController =~ /^github-(browse|review)/"
+					"when": "commentController =~ /^azdo-(browse|review)/"
 				},
 				{
 					"command": "pr.collapseAllComments",
 					"group": "1_collapse@0",
-					"when": "commentController =~ /^github-(browse|review)/"
+					"when": "commentController =~ /^azdo-(browse|review)/"
 				}
 			],
 			"comments/comment/context": [
 				{
 					"command": "pr.saveComment",
 					"group": "inline@1",
-					"when": "commentController =~ /^github-(browse|review)/"
+					"when": "commentController =~ /^azdo-(browse|review)/"
 				},
 				{
 					"command": "pr.cancelEditComment",
 					"group": "inline@2",
-					"when": "commentController =~ /^github-(browse|review)/"
+					"when": "commentController =~ /^azdo-(browse|review)/"
 				}
 			],
 			"editor/context/copy": [

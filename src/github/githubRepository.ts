@@ -192,8 +192,8 @@ export class GitHubRepository extends Disposable {
 	private _isInaccessible: boolean = false;
 	public commentsController?: vscode.CommentController;
 	public commentsHandler?: PRCommentControllerRegistry;
+	// Views retain these models, so only repository disposal may invalidate them.
 	private _pullRequestModelsByNumber: LRUCache<number, { model: PullRequestModel, disposables: vscode.Disposable[] }> = new LRUCache({
-		maxAge: 1000 * 60 * 60 * 4 /* 4 hours */, stale: true, updateAgeOnGet: true,
 		dispose: (_key, value) => {
 			disposeAll(value.disposables);
 			value.model.dispose();
@@ -287,6 +287,7 @@ export class GitHubRepository extends Disposable {
 
 	override dispose() {
 		this.providerPullRequestLoads.clear();
+		this._pullRequestModelsByNumber.reset();
 		super.dispose();
 		GitHubRepository._allRepoIds.delete(this._id);
 		for (const repoIds of GitHubRepository._succeededPullRequests.values()) {
