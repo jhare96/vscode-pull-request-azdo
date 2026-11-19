@@ -229,6 +229,17 @@ body {
 	max-width: 100%;
 }
 
+/* Restore Markdown lists suppressed by azure-devops-ui's global reset. */
+.azdo-markdown ul,
+.comment-body ul {
+	padding-left: 2em;
+}
+
+.azdo-markdown li:not(.task-list-item):not(:has(> input[type='checkbox'])):not(:has(> p > input[type='checkbox'])),
+.comment-body li:not(.task-list-item):not(:has(> input[type='checkbox'])):not(:has(> p > input[type='checkbox'])) {
+	list-style: inherit;
+}
+
 .azdo-edit {
 	display: flex;
 	flex-direction: column;
